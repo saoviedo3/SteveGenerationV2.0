@@ -1,1 +1,130 @@
-# SteveGenerationV2.0
+# Steve Generation
+
+Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco IOS XR · NNI3 CARMEN**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiqueta ZTE, script y validaciones.
+
+## Funciones
+
+- DATOS BGP, DATOS estático, INTERNET BGP e INTERNET estático.
+- Enlace único, principal (PPL) y respaldo (BCK); medio óptico o eléctrico.
+- Importación `.txt` por archivo, arrastre o texto pegado. UTF-8 y Windows-1252; máximo 256 KB. El archivo original se procesa en el navegador y no se sube al servidor.
+- Validación de VLAN, ASN, IPv4, redes CIDR y las cuatro direcciones de una WAN `/30`.
+- Vista previa de documento, script PE y validaciones; copia y descarga TXT con saltos CRLF.
+- Usuario y contraseña; administrador para crear usuarios, restablecer contraseñas y activar/desactivar cuentas. Cada persona puede cambiar su propia contraseña.
+- Historial privado: los últimos **100 documentos por usuario**. Descargar guarda el documento; copiar no lo guarda. Se pueden consultar, descargar y eliminar documentos.
+
+Juniper, scripts ZTE y soluciones NNI2/GPON **todavía no están implementados**. La etiqueta ZTE es un recurso de texto, no una configuración de ese fabricante. La aplicación no se conecta a equipos ni ejecuta comandos.
+
+## Desarrollo local
+
+Requisitos: Node.js 24 y npm. Cada tarea en la nube ya está aislada; usa el checkout existente, sin crear worktrees salvo petición explícita.
+
+```bash
+cd /workspace/SteveGenerationV2.0
+npm ci
+npm run db:migrate
+npm run admin:create -- --local --username root
+npm run dev
+```
+
+El comando de administrador solicita una contraseña de 12 a 128 caracteres **sin mostrarla**. No hay usuarios ni contraseñas predeterminados. También acepta `ADMIN_PASSWORD` desde el entorno para automatización segura; no guardes su valor en Git ni lo escribas en argumentos del comando. Si el usuario ya existe, el comando falla sin sobrescribirlo.
+
+Wrangler indica el puerto del servidor (normalmente 8787). Entra con la cuenta creada y pulsa **Cargar ejemplo** para probar las variantes. La base local permanece en `.wrangler/state`; es independiente de producción. Los procesos deben iniciarse de nuevo en cada máquina.
+
+## Reglas de NNI3 CARMEN
+
+| Recurso | Regla |
+| --- | --- |
+| Interfaz | `TenGigE0/2/1/2` |
+| Subinterfaz DATOS / INTERNET | `10` / `30` seguido de la VLAN |
+| ASN local | `19114` |
+| WAN | `/30`, máscara `255.255.255.252`; PE y CLIENTE se identifican por su rol |
+| VRF DATOS | Indicada por el usuario o importada |
+| VRF INTERNET | `internet-pccs-ncb`, fija |
+| Loopback DATOS | Obligatoria, `/32`; ruta estática en la VRF del enlace y validación en `sigmars` |
+| Redes LAN | Opcionales; rutas estáticas hacia el CPE, también con BGP |
+| DATOS BGP | `maximum-prefix 500 75`, `default_policy_pass_all` in/out, `as-override` |
+| INTERNET estático | Rutas estáticas de las redes públicas hacia el CPE |
+| INTERNET BGP | Prefix-set de redes públicas, política IN por enlace, `RP_internet-pccs-ncb_IPV4_OUT` OUT |
+| Comunidades INTERNET BGP | `(19114:20, 19114:21, 19114:504)` |
+| Preferencia/peso INTERNET BGP | `200` para único/PPL; `100` para BCK |
+| INTERNET BGP | `maximum-prefix 100 75 warning-only`, `as-override`, `remove-private-AS` |
+| Etiqueta | `CLIENTE_SUCURSAL_DAT/INT[_PPL/BCK]_ID:ACCESO:NNI3_CRM` |
+| Última milla | Siempre `UM TIGO`, aunque el TXT indique otra |
+| Medio óptico | `REQUIERE SFP 1000BASEBX` |
+| Medio eléctrico | `REQUIERE CONVERSOR OPTICO ELECTRICO` |
+
+Las redes públicas de INTERNET se incluyen también en `SMTP-WHITELIST-NET` en un bloque separado para `IPTCHL1CAR201 - IPTCHL1CCRM01`. Ese bloque conserva `commit comment` según las plantillas. Revisa documento y equipo de destino antes de pegarlo. La aplicación no verifica que las VRF y políticas compartidas ya existan en la red real.
+
+Cliente y sucursal se ingresan explícitamente. Importar un nuevo TXT borra los identificadores del enlace anterior (cliente, sucursal, IASI, OT e ID), para evitar reutilizarlos por accidente. Los identificadores de configuración se normalizan a minúsculas sin acentos, con guiones bajos; la etiqueta usa mayúsculas. El bloque WAN conserva descripción original y nombre del PE, editables en **Etiquetas del bloque WAN**. Las redes LAN y públicas aceptan varias redes separadas por líneas, comas o punto y coma. Deben estar alineadas con su prefijo; se admite una ruta de host `/32`.
+
+## Pruebas
+
+```bash
+npm test
+npm run check
+npm run test:integration
+CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
+```
+
+- `test`: parser, las 12 combinaciones de servicio/enrutamiento/tipo, redes, entradas inválidas y contraseñas.
+- `check`: sintaxis y empaquetado con `wrangler deploy --dry-run`; no publica.
+- `test:integration`: base temporal, migraciones, creación de administrador y Worker local. Comprueba autenticación, permisos, las cuatro variantes, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
+- `test:browser`: flujo real en Chromium de escritorio/móvil, importación, variantes, descarga, historial, administración y errores JavaScript/CSP. Requiere Chromium instalado o `CHROMIUM_PATH`. Usa una base temporal. Capturas en `test-results/`, ignoradas por Git.
+
+No requieren credenciales de Cloudflare. Estas pruebas no validan comandos contra un Cisco real.
+
+## Publicar en Cloudflare Workers + D1
+
+Un **Worker con assets estáticos** sirve web y API bajo el mismo origen; no requiere Pages separado. Se puede usar Workers Free y D1 Free sin servidor de pago, dentro de las cuotas de Cloudflare. Al superarlas, el servicio puede dejar de responder hasta reiniciarse la cuota. Esta configuración no contrata planes de pago ni garantiza uso ilimitado.
+
+1. Crea una cuenta Cloudflare con Workers y D1 gratuitos. En una terminal autorizada:
+
+   ```bash
+   npx wrangler login
+   npx wrangler d1 create steve-generation
+   ```
+
+2. Sustituye el `database_id` de ceros en `wrangler.jsonc` por el ID devuelto. Mantén el binding `DB` y nombre de la base. Ese ID es configuración, no una contraseña.
+
+3. Prepara producción y crea tu administrador:
+
+   ```bash
+   npm run db:migrate:remote
+   npm run admin:create -- --remote --username root
+   ```
+
+4. Publica:
+
+   ```bash
+   npm run deploy
+   ```
+
+5. Abre la dirección HTTPS asignada por Cloudflare, inicia sesión y crea las cuentas de tus compañeros en **Usuarios**. Las bases local y remota no comparten usuarios ni historial.
+
+### Despliegue automático desde GitHub
+
+`.github/workflows/ci.yml` ejecuta pruebas en pushes y pull requests. En un push a `main`, aplica migraciones y publica **solo si** están configurados estos secretos de GitHub Actions:
+
+- `CLOUDFLARE_API_TOKEN`: token con permisos de edición de Workers Scripts y D1 para la cuenta elegida.
+- `CLOUDFLARE_ACCOUNT_ID`: ID de esa cuenta.
+
+Guárdalos en GitHub → Settings → Secrets and variables → Actions; nunca en archivos. Primero configura el `database_id`, la base y el administrador. Sin secretos se ejecuta CI y se omite el despliegue. El workflow no crea cuentas de Cloudflare ni planes de pago.
+
+## Datos y acceso
+
+Contraseñas con PBKDF2-SHA256 y salt aleatorio; sesiones de 256 bits cuyo hash se almacena en la base. Cookies HttpOnly, SameSite=Strict y Secure en HTTPS; vencen a las 8 horas. Cambiar estado o restablecer contraseña revoca las sesiones del usuario. La API comprueba el origen de las escrituras, vuelve a validar los recursos y limita intentos de login por usuario e IP.
+
+El administrador gestiona cuentas; su historial también está limitado a sus propios documentos. Quien administre la base de Cloudflare sí tiene acceso técnico a sus registros. No se usa analítica ni se envían archivos a servicios externos.
+
+## Estructura
+
+```text
+public/               Interfaz y generador compartido con el servidor
+worker/               API, autenticación y acceso a D1
+migrations/           Esquema SQL versionado
+scripts/              Administrador y pruebas funcionales
+tests/                Ejemplos y pruebas de reglas
+wrangler.jsonc        Configuración de Cloudflare
+```
+
+Para ampliar soluciones, agrega reglas y pruebas con sus plantillas verificadas antes de habilitarlas en la interfaz.

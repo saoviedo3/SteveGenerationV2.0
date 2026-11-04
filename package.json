@@ -1,0 +1,24 @@
+{
+  "name": "steve-generation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --ip 0.0.0.0",
+    "db:migrate": "wrangler d1 migrations apply steve-generation --local",
+    "db:migrate:remote": "wrangler d1 migrations apply steve-generation --remote",
+    "admin:create": "node scripts/create-admin.mjs",
+    "test": "node --test --test-isolation=none tests/*.test.mjs",
+    "test:integration": "node scripts/integration.mjs",
+    "test:browser": "node scripts/browser.mjs",
+    "check": "node --check worker/index.js && node --check public/app.js && wrangler deploy --dry-run",
+    "deploy": "wrangler deploy"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "playwright-core": "1.58.2",
+    "wrangler": "4.80.0"
+  }
+}

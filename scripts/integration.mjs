@@ -1,0 +1,146 @@
+import assert from 'node:assert/strict';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { sample } from '../tests/fixtures.mjs';
+
+const directory = await mkdtemp(join(tmpdir(), 'steve-integration-'));
+const persistence = join(directory, 'state');
+const env = { ...process.env, XDG_CONFIG_HOME: join(directory, 'config'), WRANGLER_SEND_METRICS: 'false' };
+const port = process.env.TEST_PORT || '8791';
+const origin = `http://127.0.0.1:${port}`;
+const password = randomBytes(24).toString('hex');
+let server;
+let logs = '';
+let checks = 0;
+function run(command, args, extraEnv = {}) {
+  const result = spawnSync(command, args, { env: { ...env, ...extraEnv }, encoding: 'utf8' });
+  if (result.status !== 0) throw new Error(`${command} falló: ${result.stderr}\n${result.stdout}`);
+}
+async function request(path, { method = 'GET', data, cookie, originHeader = origin } = {}) {
+  const response = await fetch(`${origin}/api${path}`, {
+    method,
+    headers: { Origin: originHeader, 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+    ...(data !== undefined ? { body: JSON.stringify(data) } : {}),
+  });
+  const result = await response.json();
+  return { status: response.status, data: result, cookie: response.headers.get('set-cookie')?.split(';')[0], headers: response.headers };
+}
+async function check(name, action) { await action(); checks++; console.log(`✓ ${name}`); }
+
+try {
+  run('node_modules/.bin/wrangler', ['d1', 'migrations', 'apply', 'steve-generation', '--local', '--persist-to', persistence]);
+  run(process.execPath, ['scripts/create-admin.mjs', '--local', '--username', 'testroot', '--persist-to', persistence], { ADMIN_PASSWORD: password });
+  server = spawn('node_modules/.bin/wrangler', ['dev', '--ip', '127.0.0.1', '--port', port, '--persist-to', persistence], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+  server.stdout.on('data', chunk => { logs += chunk; });
+  server.stderr.on('data', chunk => { logs += chunk; });
+  let ready = false;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    try { ready = (await fetch(origin)).status === 200; } catch { /* Startup is still in progress. */ }
+    if (ready) break;
+    if (server.exitCode !== null) throw new Error(`Servidor detenido: ${logs}`);
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  assert.ok(ready, `El servidor no arrancó: ${logs}`);
+  let adminCookie;
+  let firstCookie;
+  let secondCookie;
+  let firstId;
+  let entryId;
+  await check('assets y cabeceras de seguridad', async () => {
+    const response = await fetch(origin);
+    assert.equal(response.status, 200);
+    assert.ok((await response.text()).includes('Tu configuración'));
+    assert.ok(response.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
+  });
+  await check('API privada y protección de origen', async () => {
+    assert.equal((await request('/history')).status, 401);
+    assert.equal((await request('/login', { method: 'POST', data: {}, originHeader: 'https://other.example' })).status, 403);
+  });
+  await check('login rechaza contraseña incorrecta y entrega cookie HttpOnly', async () => {
+    assert.equal((await request('/login', { method: 'POST', data: { username: 'testroot', password: 'incorrecta' } })).status, 401);
+    const login = await request('/login', { method: 'POST', data: { username: 'testroot', password } });
+    assert.equal(login.status, 200);
+    assert.match(login.headers.get('set-cookie'), /HttpOnly; SameSite=Strict/);
+    assert.equal(login.data.user.role, 'admin');
+    adminCookie = login.cookie;
+  });
+  await check('administrador crea cuentas; no acepta duplicados', async () => {
+    for (const username of ['engineer-one', 'engineer-two']) assert.equal((await request('/users', { method: 'POST', cookie: adminCookie, data: { username, password } })).status, 201);
+    assert.equal((await request('/users', { method: 'POST', cookie: adminCookie, data: { username: 'ENGINEER-ONE', password } })).status, 409);
+    const users = (await request('/users', { cookie: adminCookie })).data.users;
+    assert.equal(users.length, 3);
+    assert.equal(users.some(user => 'password_hash' in user), false);
+    firstId = users.find(user => user.username === 'engineer-one').id;
+    firstCookie = (await request('/login', { method: 'POST', data: { username: 'engineer-one', password } })).cookie;
+    secondCookie = (await request('/login', { method: 'POST', data: { username: 'engineer-two', password } })).cookie;
+  });
+  await check('usuario común no puede administrar cuentas', async () => {
+    assert.equal((await request('/users', { cookie: firstCookie })).status, 403);
+    assert.equal((await request('/users', { method: 'POST', cookie: firstCookie, data: { username: 'intruder', password } })).status, 403);
+  });
+  await check('generación validada en servidor y descarga recuperable', async () => {
+    assert.equal((await request('/history', { method: 'POST', cookie: firstCookie, data: { ...sample, vlan: '9999' } })).status, 422);
+    const result = await request('/history', { method: 'POST', cookie: firstCookie, data: sample });
+    assert.equal(result.status, 201);
+    assert.ok(result.data.document.includes('remote-as 64877'));
+    entryId = result.data.id;
+    const stored = await request(`/history/${entryId}`, { cookie: firstCookie });
+    assert.equal(stored.data.item.document, result.data.document);
+  });
+  await check('las cuatro variantes se generan y guardan desde la API', async () => {
+    for (const service of ['DATOS', 'INTERNET']) for (const routing of ['BGP', 'STATIC']) {
+      const result = await request('/history', { method: 'POST', cookie: firstCookie, data: { ...sample, service, routing } });
+      assert.equal(result.status, 201);
+      assert.equal(result.data.document.includes('router bgp 19114'), routing === 'BGP');
+    }
+  });
+  await check('aislamiento del historial, incluso frente al administrador', async () => {
+    assert.equal((await request('/history', { cookie: secondCookie })).data.items.length, 0);
+    for (const cookie of [secondCookie, adminCookie]) {
+      assert.equal((await request(`/history/${entryId}`, { cookie })).status, 404);
+      assert.equal((await request(`/history/${entryId}`, { method: 'DELETE', cookie })).status, 404);
+    }
+    assert.equal((await request('/history', { cookie: firstCookie })).data.items.length, 5);
+  });
+  await check('cambio de contraseña comprueba la actual', async () => {
+    assert.equal((await request('/password', { method: 'POST', cookie: firstCookie, data: { currentPassword: 'incorrecta', password: `${password}new` } })).status, 400);
+    assert.equal((await request('/password', { method: 'POST', cookie: firstCookie, data: { currentPassword: password, password: `${password}new` } })).status, 200);
+  });
+  await check('desactivar revoca sesiones y bloquea el login', async () => {
+    assert.equal((await request(`/users/${firstId}`, { method: 'PATCH', cookie: adminCookie, data: { active: false } })).status, 200);
+    assert.equal((await request('/me', { cookie: firstCookie })).status, 401);
+    assert.equal((await request('/login', { method: 'POST', data: { username: 'engineer-one', password: `${password}new` } })).status, 401);
+  });
+  await check('restablecer contraseña permite reactivar la cuenta', async () => {
+    assert.equal((await request(`/users/${firstId}`, { method: 'PATCH', cookie: adminCookie, data: { active: true, password } })).status, 200);
+    const login = await request('/login', { method: 'POST', data: { username: 'engineer-one', password } });
+    assert.equal(login.status, 200);
+    firstCookie = login.cookie;
+  });
+  await check('borrado propio y cierre de sesión', async () => {
+    assert.equal((await request(`/history/${entryId}`, { method: 'DELETE', cookie: firstCookie })).status, 200);
+    assert.equal((await request(`/history/${entryId}`, { cookie: firstCookie })).status, 404);
+    assert.equal((await request('/logout', { method: 'POST', cookie: firstCookie })).status, 200);
+    assert.equal((await request('/me', { cookie: firstCookie })).status, 401);
+  });
+  await check('límite de intentos de login', async () => {
+    let last;
+    for (let i = 0; i < 11; i++) last = await request('/login', { method: 'POST', data: { username: 'missing-user', password: 'not-a-real-password' } });
+    assert.equal(last.status, 429);
+    assert.equal(last.headers.get('retry-after'), '900');
+  });
+  console.log(`\n${checks} comprobaciones de integración pasaron con Worker y D1 locales.`);
+} catch (error) {
+  console.error(error);
+  console.error(logs.slice(-5000));
+  process.exitCode = 1;
+} finally {
+  if (server && server.exitCode === null) {
+    server.kill('SIGTERM');
+    await new Promise(resolve => server.once('exit', resolve));
+  }
+  await rm(directory, { recursive: true, force: true });
+}
