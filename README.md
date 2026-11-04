@@ -28,6 +28,21 @@ npm run dev
 
 El comando de administrador solicita una contraseña de 12 a 128 caracteres **sin mostrarla**. No hay usuarios ni contraseñas predeterminados. También acepta `ADMIN_PASSWORD` desde el entorno para automatización segura; no guardes su valor en Git ni lo escribas en argumentos del comando. Si el usuario ya existe, el comando falla sin sobrescribirlo.
 
+En Windows puedes usar PowerShell. Los scripts ejecutan el archivo JavaScript de Wrangler con Node, sin depender de archivos `.bin` específicos de Linux ni de comandos de shell para pasar argumentos. También se admiten rutas con espacios, como las de OneDrive. La integración de GitHub está configurada para ejecutar las pruebas tanto en Windows como en Linux.
+
+Si instalaste la primera versión y `admin:create` solo muestra «No se creó el administrador» sin salida previa de Wrangler, actualiza tu checkout conservando tus cambios locales:
+
+```powershell
+git switch codex/steve-generation-v1
+git pull --ff-only
+npm ci
+npm run db:migrate
+npm run admin:create -- --local --username root
+npm run dev
+```
+
+La actualización conserva `.wrangler/state` y no reinicia tu base. Si Git indica cambios locales incompatibles, no los descartes; resuélvelos antes de continuar. No se necesita `npm audit fix --force`: el proyecto fija una versión actualizada de Wrangler con sus dependencias corregidas. Los avisos de npm sobre `install-scripts` son distintos de un error al ejecutar el script; puedes revisar los paquetes con `npm install-scripts ls` si tu versión de npm lo admite.
+
 Wrangler indica el puerto del servidor (normalmente 8787). Entra con la cuenta creada y pulsa **Cargar ejemplo** para probar las variantes. La base local permanece en `.wrangler/state`; es independiente de producción. Los procesos deben iniciarse de nuevo en cada máquina.
 
 ## Reglas de NNI3 CARMEN

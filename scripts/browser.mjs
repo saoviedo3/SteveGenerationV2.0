@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { inventory, sample } from '../tests/fixtures.mjs';
+import { wranglerArgs, stopProcess } from './wrangler.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'steve-browser-'));
 const persistence = join(directory, 'state');
@@ -30,9 +31,9 @@ async function login(page, username) {
 }
 
 try {
-  run('node_modules/.bin/wrangler', ['d1', 'migrations', 'apply', 'steve-generation', '--local', '--persist-to', persistence]);
+  run(process.execPath, wranglerArgs(['d1', 'migrations', 'apply', 'steve-generation', '--local', '--persist-to', persistence]));
   run(process.execPath, ['scripts/create-admin.mjs', '--local', '--username', 'testroot', '--persist-to', persistence], { ADMIN_PASSWORD: password });
-  server = spawn('node_modules/.bin/wrangler', ['dev', '--ip', '127.0.0.1', '--port', port, '--persist-to', persistence], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+  server = spawn(process.execPath, wranglerArgs(['dev', '--ip', '127.0.0.1', '--port', port, '--persist-to', persistence]), { env, stdio: ['ignore', 'pipe', 'pipe'] });
   server.stdout.on('data', chunk => { logs += chunk; });
   server.stderr.on('data', chunk => { logs += chunk; });
   let ready = false;
@@ -139,9 +140,6 @@ try {
   process.exitCode = 1;
 } finally {
   if (browser) await browser.close();
-  if (server && server.exitCode === null) {
-    server.kill('SIGTERM');
-    await new Promise(resolve => server.once('exit', resolve));
-  }
+  await stopProcess(server);
   await rm(directory, { recursive: true, force: true });
 }

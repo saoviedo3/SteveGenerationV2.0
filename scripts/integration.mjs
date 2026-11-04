@@ -5,9 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { sample } from '../tests/fixtures.mjs';
+import { wranglerArgs, stopProcess } from './wrangler.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'steve-integration-'));
-const persistence = join(directory, 'state');
+const persistence = join(directory, 'state with spaces');
 const env = { ...process.env, XDG_CONFIG_HOME: join(directory, 'config'), WRANGLER_SEND_METRICS: 'false' };
 const port = process.env.TEST_PORT || '8791';
 const origin = `http://127.0.0.1:${port}`;
@@ -31,9 +32,15 @@ async function request(path, { method = 'GET', data, cookie, originHeader = orig
 async function check(name, action) { await action(); checks++; console.log(`✓ ${name}`); }
 
 try {
-  run('node_modules/.bin/wrangler', ['d1', 'migrations', 'apply', 'steve-generation', '--local', '--persist-to', persistence]);
+  run(process.execPath, wranglerArgs(['d1', 'migrations', 'apply', 'steve-generation', '--local', '--persist-to', persistence]));
   run(process.execPath, ['scripts/create-admin.mjs', '--local', '--username', 'testroot', '--persist-to', persistence], { ADMIN_PASSWORD: password });
-  server = spawn('node_modules/.bin/wrangler', ['dev', '--ip', '127.0.0.1', '--port', port, '--persist-to', persistence], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+  await check('CLI informa un administrador duplicado sin revelar la contraseña', async () => {
+    const duplicate = spawnSync(process.execPath, ['scripts/create-admin.mjs', '--local', '--username', 'testroot', '--persist-to', persistence], { env: { ...env, ADMIN_PASSWORD: password }, encoding: 'utf8' });
+    assert.equal(duplicate.status, 1);
+    assert.ok(duplicate.stderr.includes('Wrangler terminó con código'));
+    assert.ok(!`${duplicate.stdout}${duplicate.stderr}`.includes(password));
+  });
+  server = spawn(process.execPath, wranglerArgs(['dev', '--ip', '127.0.0.1', '--port', port, '--persist-to', persistence]), { env, stdio: ['ignore', 'pipe', 'pipe'] });
   server.stdout.on('data', chunk => { logs += chunk; });
   server.stderr.on('data', chunk => { logs += chunk; });
   let ready = false;
@@ -138,9 +145,6 @@ try {
   console.error(logs.slice(-5000));
   process.exitCode = 1;
 } finally {
-  if (server && server.exitCode === null) {
-    server.kill('SIGTERM');
-    await new Promise(resolve => server.once('exit', resolve));
-  }
+  await stopProcess(server);
   await rm(directory, { recursive: true, force: true });
 }

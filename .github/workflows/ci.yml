@@ -2,7 +2,7 @@ name: Check and deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/steve-generation-v1]
   pull_request:
 
 permissions:
@@ -14,7 +14,11 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

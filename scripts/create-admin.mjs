@@ -4,6 +4,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { wranglerArgs } from './wrangler.mjs';
 
 const args = process.argv.slice(2);
 const local = args.includes('--local');
@@ -52,8 +53,9 @@ try {
   const file = join(directory, 'create.sql');
   await writeFile(file, `INSERT INTO users (id, username, password_hash, role) VALUES ('${randomUUID()}', '${username.toLowerCase()}', '${hash}', 'admin');`, { mode: 0o600 });
   if (persistTo && !local) throw new Error('--persist-to solo se puede usar con --local.');
-  const result = spawnSync('node_modules/.bin/wrangler', ['d1', 'execute', 'steve-generation', local ? '--local' : '--remote', '--file', file, ...(persistTo ? ['--persist-to', persistTo] : [])], { stdio: 'inherit' });
-  if (result.status !== 0) throw new Error('No se creó el administrador. Comprueba las migraciones, la conexión y si el usuario ya existe.');
+  const result = spawnSync(process.execPath, wranglerArgs(['d1', 'execute', 'steve-generation', local ? '--local' : '--remote', '--file', file, ...(persistTo ? ['--persist-to', persistTo] : [])]), { stdio: 'inherit' });
+  if (result.error) throw new Error(`No se pudo iniciar Wrangler (${result.error.code || 'error de proceso'}). Comprueba Node.js y ejecuta npm ci.`);
+  if (result.status !== 0) throw new Error(`Wrangler terminó ${result.signal ? `con señal ${result.signal}` : `con código ${result.status}`}. No se creó el administrador; revisa el error mostrado arriba.`);
   console.log(`Administrador ${username.toLowerCase()} creado en ${local ? 'la base local' : 'Cloudflare'}.`);
 } catch (error) {
   console.error(error.message);
