@@ -5,13 +5,13 @@ import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { inventory, sample } from '../tests/fixtures.mjs';
+import { inventory, sample, mapSample } from '../tests/fixtures.mjs';
 import { wranglerArgs, stopProcess } from './wrangler.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'steve-browser-'));
 const persistence = join(directory, 'state');
 const env = { ...process.env, XDG_CONFIG_HOME: join(directory, 'config'), WRANGLER_SEND_METRICS: 'false' };
-const password = randomBytes(24).toString('hex');
+const password = randomBytes(2).toString('hex'); // Both the CLI and UI must accept four characters.
 const port = process.env.BROWSER_TEST_PORT || '8792';
 const origin = `http://127.0.0.1:${port}`;
 const errors = [];
@@ -54,6 +54,8 @@ try {
   await page.locator('#login-view').waitFor({ state: 'visible' });
   await page.screenshot({ path: 'test-results/login-desktop.png', fullPage: true });
   await login(page, 'testroot');
+  assert.ok(!(await page.locator('body').innerText()).includes('IOS XR'));
+  assert.equal(await page.locator('[name=solution] option').count(), 2);
   await page.screenshot({ path: 'test-results/studio-empty.png', fullPage: true });
   console.log('✓ Inicio de sesión de administrador e interfaz inicial');
 
@@ -62,11 +64,12 @@ try {
   assert.ok(await page.locator('[aria-invalid=true]').count() > 5);
   await page.locator('#load-example').click();
   assert.match(await page.locator('#code-preview').textContent(), /remote-as 64877/);
-  await page.locator('#inventory-file').setInputFiles({ name: 'recursos.txt', mimeType: 'text/plain', buffer: Buffer.from(inventory) });
+  await page.locator('#inventory-file').setInputFiles({ name: 'recursos.txt', mimeType: 'text/plain', buffer: Buffer.from(inventory.replace('UM TIGO', 'UM TELEFONICA')) });
   await page.waitForFunction(() => document.querySelector('#import-status').textContent.includes('IMPORTADO'));
   assert.equal(await page.locator('[name=wanPe]').inputValue(), '10.115.3.205');
   assert.equal(await page.locator('[name=vrf]').inputValue(), '');
   assert.equal(await page.locator('[name=linkId]').inputValue(), '');
+  assert.equal(await page.locator('[name=lastMile]').inputValue(), 'UM TELEFONICA');
   for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId']) await page.locator(`#config-form [name=${key}]`).fill(sample[key]);
   await page.locator('[name=access]').fill('PRADERA_GUASMO_6150');
   await page.locator('[name=port]').fill('OIGE8[0-1-7] GE: 8');
@@ -113,8 +116,44 @@ try {
   await page.locator('.history-item').waitFor();
   console.log('✓ Descarga real con CRLF, historial y búsqueda');
 
+  await page.locator('.nav-item[data-view=generator]').click();
+  await page.locator('[name=solution]').selectOption('NNI2_MAP');
+  await page.locator('#load-example').click();
+  assert.equal(await page.locator('[name=solution]').inputValue(), 'NNI2_MAP');
+  await page.locator('[name=engineeringUrl]').fill(mapSample.engineeringUrl);
+  await page.locator('[name=lastMile]').fill('UM TELEFONICA');
+  await page.locator('[name=routing]').selectOption('STATIC');
+  const mapDataStatic = await page.locator('#code-preview').textContent();
+  assert.ok(mapDataStatic.startsWith(`130763-4-1 BCO PACIFICO GYE PLAZA GUAYARTE BCK DATOS\n\n${mapSample.engineeringUrl}\n-----------------------------`));
+  assert.ok(mapDataStatic.includes('ip route vrf bco_pacifico_datos 10.116.104.86 255.255.255.255 TenGigabitEthernet1/1/1.102707 10.115.9.86 tag 10 name bco_pacifico_gye_plaza_guayart'));
+  assert.ok(mapDataStatic.includes('OBSERVACIONES:\nUM TELEFONICA'));
+  await page.locator('[name=routing]').selectOption('BGP');
+  assert.match(await page.locator('#code-preview').textContent(), /neighbor 10\.115\.9\.86 maximum-prefix 500/);
+  await page.locator('[name=service]').selectOption('INTERNET');
+  await page.locator('[name=publicNetworks]').fill('200.7.198.88 /30');
+  await page.locator('[name=routing]').selectOption('STATIC');
+  assert.match(await page.locator('#code-preview').textContent(), /ip route vrf internet-pccs-ncb 200\.7\.198\.88 255\.255\.255\.252 TenGigabitEthernet1\/1\/1\.302707/);
+  await page.locator('[name=routing]').selectOption('BGP');
+  assert.match(await page.locator('#code-preview').textContent(), /ip prefix-list PL_bco_pacifico_gye_plaza_guayarte_int_bck_10072843_ALLOWED_IPV4 seq 5 permit 200\.7\.198\.88\/30/);
+  assert.match(await page.locator('#code-preview').textContent(), /set local-preference 100/);
+  await page.screenshot({ path: 'test-results/mapasingue-desktop.png', fullPage: true });
+  const mapDownloading = page.waitForEvent('download');
+  await page.locator('#download').click();
+  const mapDownload = await mapDownloading;
+  const mapContent = await readFile(await mapDownload.path(), 'utf8');
+  assert.ok(mapContent.includes(mapSample.engineeringUrl));
+  assert.ok(mapContent.includes('OBSERVACIONES:\r\nUM TELEFONICA'));
+  await page.locator('.nav-item[data-view=history]').click();
+  await page.locator('#history-search').fill('MAPASINGUE');
+  await page.locator('.history-item').waitFor();
+  assert.equal(await page.locator('.history-item').count(), 1);
+  assert.ok((await page.locator('.history-item').textContent()).includes('NNI2 MAPASINGUE'));
+  console.log('✓ Cuatro variantes NNI2, ingeniería, última milla editable e historial por solución');
+
   await page.locator('#users-nav').click();
   await page.locator('#create-user-form [name=username]').fill('colleague');
+  await page.locator('#create-user-form [name=password]').fill('abc');
+  assert.equal(await page.locator('#create-user-form').evaluate(form => form.checkValidity()), false);
   await page.locator('#create-user-form [name=password]').fill(password);
   await page.locator('#create-user-form button').click();
   await page.getByText('Usuario creado. Ya puede iniciar sesión.').waitFor();
@@ -124,7 +163,7 @@ try {
   assert.equal(await page.locator('#users-nav').isVisible(), false);
   await page.locator('.nav-item[data-view=history]').click();
   await page.getByRole('heading', { name: 'Tu próximo enlace empieza aquí' }).waitFor();
-  console.log('✓ Creación de usuario, cierre de sesión e historial privado vacío');
+  console.log('✓ Contraseña de cuatro caracteres, cierre de sesión e historial privado vacío');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('.nav-item[data-view=generator]').click();

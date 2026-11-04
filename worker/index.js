@@ -97,7 +97,7 @@ async function api(request, env) {
     return json({ ok: true });
   }
   if (pathname === '/api/history' && method === 'GET') {
-    const rows = await env.DB.prepare('SELECT id, title, service, routing, link_type, filename, created_at FROM history WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 100').bind(user.id).all();
+    const rows = await env.DB.prepare('SELECT id, title, service, routing, link_type, solution, filename, created_at FROM history WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 100').bind(user.id).all();
     return json({ items: rows.results });
   }
   if (pathname === '/api/history' && method === 'POST') {
@@ -106,7 +106,7 @@ async function api(request, env) {
     if (Object.keys(result.errors).length) return json({ error: 'Revisa los campos de la configuración.', fields: result.errors }, 422);
     const id = crypto.randomUUID();
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO history (id, user_id, title, service, routing, link_type, filename, document) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(id, user.id, result.title, data.service, data.routing, data.linkType, result.filename, result.document),
+      env.DB.prepare('INSERT INTO history (id, user_id, title, service, routing, link_type, solution, filename, document) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, user.id, result.title, data.service, data.routing, data.linkType, data.solution, result.filename, result.document),
       env.DB.prepare('DELETE FROM history WHERE user_id = ? AND id NOT IN (SELECT id FROM history WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 100)').bind(user.id, user.id),
     ]);
     return json({ id, filename: result.filename, document: result.document }, 201);

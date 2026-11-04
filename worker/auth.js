@@ -20,5 +20,5 @@ export async function verifyPassword(password, saved) {
 }
 
 export function passwordError(password) {
-  return typeof password !== 'string' || password.length < 12 || password.length > 128 ? 'La contraseña debe tener entre 12 y 128 caracteres.' : null;
+  return typeof password !== 'string' || password.length < 4 || password.length > 128 ? 'La contraseña debe tener entre 4 y 128 caracteres.' : null;
 }

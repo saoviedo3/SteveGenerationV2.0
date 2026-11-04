@@ -13,11 +13,12 @@ test('importa el formato Network Inventory con CRLF y VRF vacía', () => {
   assert.equal(parsed.wanRows.length, 4);
   assert.deepEqual(parsed.warnings, []);
 });
-test('importa Internet, ignora última milla y aplica la VRF fija', () => {
+test('importa Internet, conserva última milla y aplica la VRF fija', () => {
   const parsed = parseInventory(inventory.replace('SERVICIO:  DATOS', 'SERVICIO: INTERNET').replace('RED PUBLICA:', 'RED PÚBLICA: 10.115.3.200/29').replace('UM TIGO', 'UM TELEFONICA'));
   assert.equal(parsed.publicNetworks, '10.115.3.200/29');
   assert.equal(parsed.vrf, 'internet-pccs-ncb');
   assert.equal(parsed.service, 'INTERNET');
+  assert.equal(parsed.lastMile, 'UM TELEFONICA');
 });
 
 for (const service of ['DATOS', 'INTERNET']) for (const routing of ['BGP', 'STATIC']) for (const linkType of ['UNIQUE', 'PPL', 'BCK']) {
@@ -103,7 +104,7 @@ test('no deduce PE y CPE por posición de fila ni por último octeto', () => {
 test('nombres con acentos se normalizan y medio eléctrico cambia observación', () => {
   const output = generate({ ...sample, client: 'Farmacías', branch: 'Sede Norte', medium: 'ELECTRICAL' });
   assert.ok(output.tag.startsWith('FARMACIAS_SEDE_NORTE_DAT_'));
-  assert.ok(output.document.includes('REQUIERE CONVERSOR OPTICO ELECTRICO'));
+  assert.ok(output.document.includes('REQUIERE CONVERSOR OPTICO/ELECTRICO'));
 });
 test('rechaza entradas incompletas, redes incoherentes e inyección de comandos', () => {
   const cases = [

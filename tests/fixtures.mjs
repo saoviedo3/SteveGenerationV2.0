@@ -7,6 +7,26 @@ export const sample = {
   responsible: 'Steven Alejandro Oviedo Buitron', wanNetwork: '10.115.3.204', wanPe: '10.115.3.205',
   wanCpe: '10.115.3.206', wanBroadcast: '10.115.3.207',
   wanLabel: 'FARCOMED SANA SANA MALDONADO DATOS', peName: 'IPTCHL3CCRM03',
+  lastMile: 'UM TIGO', engineeringUrl: '',
+};
+
+export const mapSample = {
+  ...sample, solution: 'NNI2_MAP', iasi: '130763-4-1', client: 'BCO PACIFICO', branch: 'GYE PLAZA GUAYARTE',
+  linkId: '10072843', workOrder: 'CHG0510792', access: 'U_CATOLICA_GYE_GWT_6150', port: 'OIGE8[0-1-7] GE: 4',
+  bandwidth: '1024Kbps', vlan: '2707', vrf: 'bco_pacifico_datos', loopback: '10.116.104.86/32',
+  wanNetwork: '10.115.9.84', wanPe: '10.115.9.85', wanCpe: '10.115.9.86', wanBroadcast: '10.115.9.87',
+  wanLabel: 'BANCO DEL PACIFICO GYE PLAZA GUAYARTE DATOS BCKDATOS', peName: 'IPTCHL3MAPA02',
+  medium: 'ELECTRICAL', linkType: 'BCK',
+  engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@a673_GUAY_GYE-OTRO_GYE-ATMPGRT_SERV-DBCK',
+};
+
+export const mapInternetSample = {
+  ...mapSample, service: 'INTERNET', iasi: '125422-16-1', client: 'RAVCORP', branch: 'BODEGAS PAPO',
+  linkId: '10072303', workOrder: 'CHG0501020', access: 'DURAN_INDUSTRIAL_6120H-S', port: 'SMGD[0-1-1] 10GE',
+  bandwidth: '51200Kbps', vlan: '2714', asn: '65540', publicNetworks: '200.7.198.88 /30',
+  wanNetwork: '10.115.9.148', wanPe: '10.115.9.149', wanCpe: '10.115.9.150', wanBroadcast: '10.115.9.151',
+  wanLabel: 'RAVCORP BODEGAS PAPO INT BACKUP INTERNET', medium: 'OPTICAL',
+  engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@C072_GUAY_BACKUP_DRN-BPAPO-BCK_SERV-IBCK',
 };
 
 export const inventory = `FARMACIAS Y COMISARIATOS DE MEDICINAS SA FARCOMED

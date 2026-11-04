@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { sample } from '../tests/fixtures.mjs';
+import { sample, mapSample, mapInternetSample } from '../tests/fixtures.mjs';
 import { wranglerArgs, stopProcess } from './wrangler.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'steve-integration-'));
@@ -12,7 +12,7 @@ const persistence = join(directory, 'state with spaces');
 const env = { ...process.env, XDG_CONFIG_HOME: join(directory, 'config'), WRANGLER_SEND_METRICS: 'false' };
 const port = process.env.TEST_PORT || '8791';
 const origin = `http://127.0.0.1:${port}`;
-const password = randomBytes(24).toString('hex');
+const password = `!${randomBytes(1).toString('hex')}?`; // Exercise the requested four-character minimum.
 let server;
 let logs = '';
 let checks = 0;
@@ -75,6 +75,7 @@ try {
     adminCookie = login.cookie;
   });
   await check('administrador crea cuentas; no acepta duplicados', async () => {
+    assert.equal((await request('/users', { method: 'POST', cookie: adminCookie, data: { username: 'short-password', password: 'abc' } })).status, 400);
     for (const username of ['engineer-one', 'engineer-two']) assert.equal((await request('/users', { method: 'POST', cookie: adminCookie, data: { username, password } })).status, 201);
     assert.equal((await request('/users', { method: 'POST', cookie: adminCookie, data: { username: 'ENGINEER-ONE', password } })).status, 409);
     const users = (await request('/users', { cookie: adminCookie })).data.users;
@@ -97,12 +98,17 @@ try {
     const stored = await request(`/history/${entryId}`, { cookie: firstCookie });
     assert.equal(stored.data.item.document, result.data.document);
   });
-  await check('las cuatro variantes se generan y guardan desde la API', async () => {
-    for (const service of ['DATOS', 'INTERNET']) for (const routing of ['BGP', 'STATIC']) {
-      const result = await request('/history', { method: 'POST', cookie: firstCookie, data: { ...sample, service, routing } });
+  await check('las ocho variantes se generan y guardan con su solución', async () => {
+    for (const solution of ['NNI3_CRM', 'NNI2_MAP']) for (const service of ['DATOS', 'INTERNET']) for (const routing of ['BGP', 'STATIC']) {
+      const input = solution === 'NNI3_CRM' ? sample : service === 'DATOS' ? mapSample : mapInternetSample;
+      const result = await request('/history', { method: 'POST', cookie: firstCookie, data: { ...input, solution, service, routing, engineeringUrl: mapSample.engineeringUrl, lastMile: 'UM TELEFONICA' } });
       assert.equal(result.status, 201);
       assert.equal(result.data.document.includes('router bgp 19114'), routing === 'BGP');
+      assert.ok(result.data.document.includes('OBSERVACIONES:\nUM TELEFONICA'));
+      assert.ok(result.data.document.includes(mapSample.engineeringUrl));
     }
+    const items = (await request('/history', { cookie: firstCookie })).data.items;
+    assert.equal(items.filter(item => item.solution === 'NNI2_MAP').length, 4);
   });
   await check('aislamiento del historial, incluso frente al administrador', async () => {
     assert.equal((await request('/history', { cookie: secondCookie })).data.items.length, 0);
@@ -110,9 +116,10 @@ try {
       assert.equal((await request(`/history/${entryId}`, { cookie })).status, 404);
       assert.equal((await request(`/history/${entryId}`, { method: 'DELETE', cookie })).status, 404);
     }
-    assert.equal((await request('/history', { cookie: firstCookie })).data.items.length, 5);
+    assert.equal((await request('/history', { cookie: firstCookie })).data.items.length, 9);
   });
   await check('cambio de contraseña comprueba la actual', async () => {
+    assert.equal((await request('/password', { method: 'POST', cookie: firstCookie, data: { currentPassword: password, password: 'abc' } })).status, 400);
     assert.equal((await request('/password', { method: 'POST', cookie: firstCookie, data: { currentPassword: 'incorrecta', password: `${password}new` } })).status, 400);
     assert.equal((await request('/password', { method: 'POST', cookie: firstCookie, data: { currentPassword: password, password: `${password}new` } })).status, 200);
   });

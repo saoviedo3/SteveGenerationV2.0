@@ -20,7 +20,7 @@ function readPassword() {
   if (!process.stdin.isTTY) throw new Error('Usa una terminal interactiva o ADMIN_PASSWORD en el entorno.');
   return new Promise(resolve => {
     let password = '';
-    process.stdout.write('Contraseña del administrador (12–128 caracteres): ');
+    process.stdout.write('Contraseña del administrador (4–128 caracteres): ');
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');

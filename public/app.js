@@ -1,4 +1,4 @@
-import { generate, parseInventory, SOLUTION } from './lib/generator.js';
+import { generate, parseInventory, SOLUTIONS } from './lib/generator.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -153,6 +153,7 @@ function syncFields() {
   $('#asn-field').hidden = !bgp;
   $('#loopback-field').hidden = internet;
   $('#public-field').hidden = !internet;
+  $('.workflow-label').textContent = `CISCO / ${SOLUTIONS[form.elements.solution.value].label}`;
 }
 function renderErrors(errors) {
   $$('.field-error').forEach(node => node.remove());
@@ -195,7 +196,7 @@ function update() {
   $('#code-filename').textContent = valid ? current.filename : 'configuracion.txt';
   $('#tag-box').hidden = !valid;
   $('#tag-text').textContent = valid ? current.tag : '';
-  $('#interface-summary').textContent = valid ? current.interface : 'NNI3 CARMEN · Cisco IOS XR';
+  $('#interface-summary').textContent = valid ? current.interface : `${SOLUTIONS[form.elements.solution.value].label} · Cisco`;
 }
 form.addEventListener('input', update);
 form.addEventListener('change', update);
@@ -221,8 +222,8 @@ function importText(text, filename = 'Texto importado') {
   const parsed = parseInventory(text);
   if (!parsed.service && !parsed.bandwidth && !parsed.wanRows.length) throw new Error('No se reconocieron recursos de Network Inventory. Revisa el contenido del TXT.');
   // A new source must not inherit identifiers from a previous or demo link.
-  for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId']) form.elements[key].value = '';
-  for (const key of ['access', 'port', 'bandwidth', 'vlan', 'vrf', 'asn', 'loopback', 'publicNetworks', 'lanNetworks', 'responsible', 'wanNetwork', 'wanPe', 'wanCpe', 'wanBroadcast', 'wanLabel', 'peName']) form.elements[key].value = parsed[key] ?? '';
+  for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId', 'engineeringUrl']) form.elements[key].value = '';
+  for (const key of ['access', 'port', 'bandwidth', 'vlan', 'vrf', 'asn', 'loopback', 'publicNetworks', 'lanNetworks', 'responsible', 'wanNetwork', 'wanPe', 'wanCpe', 'wanBroadcast', 'wanLabel', 'peName', 'lastMile']) form.elements[key].value = parsed[key] ?? '';
   if (['DATOS', 'INTERNET'].includes(parsed.service)) form.elements.service.value = parsed.service;
   if (parsed.routing) form.elements.routing.value = parsed.routing;
   lastService = form.elements.service.value;
@@ -257,7 +258,15 @@ for (const name of ['dragleave', 'drop']) $('#dropzone').addEventListener(name, 
 $('#dropzone').addEventListener('drop', event => importFile(event.dataTransfer.files[0]));
 
 $('#load-example').addEventListener('click', () => {
-  const example = { solution: SOLUTION, service: 'DATOS', routing: 'BGP', linkType: 'UNIQUE', medium: 'OPTICAL', client: 'FARCOMED', branch: 'SS MALDONADO', iasi: '124906-36-1', linkId: '10066459', workOrder: 'CRQ000000190789', access: 'PRADERA_GUASMO_6150', port: 'OIGE8[0-1-7] GE: 8', bandwidth: '10240Kbps', vlan: '3230', vrf: 'econofarm_datos', asn: '64877', loopback: '10.116.101.128/32', publicNetworks: '10.115.3.200/29', lanNetworks: '', responsible: 'Steven Alejandro Oviedo Buitron', wanNetwork: '10.115.3.204', wanPe: '10.115.3.205', wanCpe: '10.115.3.206', wanBroadcast: '10.115.3.207', wanLabel: 'FARCOMED SANA SANA MALDONADO DATOS', peName: 'IPTCHL3CCRM03' };
+  const solution = form.elements.solution.value;
+  const example = { solution, service: 'DATOS', routing: 'BGP', linkType: 'UNIQUE', medium: 'OPTICAL', client: 'FARCOMED', branch: 'SS MALDONADO', iasi: '124906-36-1', linkId: '10066459', workOrder: 'CRQ000000190789', access: 'PRADERA_GUASMO_6150', port: 'OIGE8[0-1-7] GE: 8', bandwidth: '10240Kbps', vlan: '3230', vrf: 'econofarm_datos', asn: '64877', loopback: '10.116.101.128/32', publicNetworks: '10.115.3.200/29', lanNetworks: '', responsible: 'Steven Alejandro Oviedo Buitron', wanNetwork: '10.115.3.204', wanPe: '10.115.3.205', wanCpe: '10.115.3.206', wanBroadcast: '10.115.3.207', wanLabel: 'FARCOMED SANA SANA MALDONADO DATOS', peName: 'IPTCHL3CCRM03', lastMile: 'UM TIGO', engineeringUrl: '' };
+  if (solution === 'NNI2_MAP') Object.assign(example, {
+    client: 'BCO PACIFICO', branch: 'GYE PLAZA GUAYARTE', iasi: '130763-4-1', linkId: '10072843',
+    workOrder: 'CHG0510792', access: 'U_CATOLICA_GYE_GWT_6150', port: 'OIGE8[0-1-7] GE: 4',
+    bandwidth: '1024Kbps', vlan: '2707', vrf: 'bco_pacifico_datos', linkType: 'BCK', medium: 'ELECTRICAL',
+    loopback: '10.116.104.86/32', wanNetwork: '10.115.9.84', wanPe: '10.115.9.85', wanCpe: '10.115.9.86', wanBroadcast: '10.115.9.87',
+    wanLabel: 'BANCO DEL PACIFICO GYE PLAZA GUAYARTE DATOS BCKDATOS', peName: 'IPTCHL3MAPA02',
+  });
   for (const [key, value] of Object.entries(example)) form.elements[key].value = value;
   lastService = 'DATOS';
   datosVrf = example.vrf;
@@ -266,7 +275,7 @@ $('#load-example').addEventListener('click', () => {
   $('#import-message').className = 'import-message';
   $('#import-status').textContent = 'EJEMPLO';
   update();
-  toast('Ejemplo cargado. Puedes explorar las cuatro variantes.');
+  toast(`Ejemplo de ${SOLUTIONS[solution].label} cargado. Puedes explorar sus cuatro variantes.`);
 });
 
 function requireValid() {
@@ -326,7 +335,7 @@ async function loadHistory() {
 }
 function renderHistory() {
   const term = $('#history-search').value.trim().toLowerCase();
-  const items = history.filter(item => item.title.toLowerCase().includes(term));
+  const items = history.filter(item => `${item.title} ${SOLUTIONS[item.solution]?.label ?? ''}`.toLowerCase().includes(term));
   $('#history-count').textContent = `${items.length} ${items.length === 1 ? 'DOCUMENTO' : 'DOCUMENTOS'}`;
   $('#history-list').replaceChildren();
   if (!items.length) {
@@ -338,7 +347,7 @@ function renderHistory() {
     const card = element('article', 'history-item');
     const info = element('div');
     const meta = element('div', 'history-meta');
-    meta.append(element('span', 'subtle-badge', `${item.service} / ${item.routing === 'STATIC' ? 'ESTÁTICO' : 'BGP'}`), element('p', '', dateFormat.format(new Date(item.created_at))));
+    meta.append(element('span', 'subtle-badge', SOLUTIONS[item.solution]?.label ?? 'NNI3 CARMEN'), element('span', 'subtle-badge', `${item.service} / ${item.routing === 'STATIC' ? 'ESTÁTICO' : 'BGP'}`), element('p', '', dateFormat.format(new Date(item.created_at))));
     info.append(element('h3', '', item.title), meta);
     const actions = element('div', 'actions');
     const view = element('button', 'button secondary small', 'Ver documento');

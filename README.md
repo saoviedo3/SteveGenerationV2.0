@@ -1,18 +1,19 @@
 # Steve Generation
 
-Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco IOS XR · NNI3 CARMEN**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiqueta ZTE, script y validaciones.
+Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco · NNI3 CARMEN y NNI2 MAPASINGUE**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiqueta ZTE, script y validaciones.
 
 ## Funciones
 
-- DATOS BGP, DATOS estático, INTERNET BGP e INTERNET estático.
+- DATOS BGP, DATOS estático, INTERNET BGP e INTERNET estático en NNI3 CARMEN y NNI2 MAPASINGUE: ocho plantillas.
 - Enlace único, principal (PPL) y respaldo (BCK); medio óptico o eléctrico.
 - Importación `.txt` por archivo, arrastre o texto pegado. UTF-8 y Windows-1252; máximo 256 KB. El archivo original se procesa en el navegador y no se sube al servidor.
 - Validación de VLAN, ASN, IPv4, redes CIDR y las cuatro direcciones de una WAN `/30`.
 - Vista previa de documento, script PE y validaciones; copia y descarga TXT con saltos CRLF.
 - Usuario y contraseña; administrador para crear usuarios, restablecer contraseñas y activar/desactivar cuentas. Cada persona puede cambiar su propia contraseña.
+- Enlace opcional a la ingeniería, debajo del título del TXT. Se admite HTTP/HTTPS y se conserva el enlace completo con sus parámetros.
 - Historial privado: los últimos **100 documentos por usuario**. Descargar guarda el documento; copiar no lo guarda. Se pueden consultar, descargar y eliminar documentos.
 
-Juniper, scripts ZTE y soluciones NNI2/GPON **todavía no están implementados**. La etiqueta ZTE es un recurso de texto, no una configuración de ese fabricante. La aplicación no se conecta a equipos ni ejecuta comandos.
+Juniper, scripts ZTE y soluciones GPON y NNI2 CARMEN **todavía no están implementados**. La etiqueta ZTE es un recurso de texto, no una configuración de ese fabricante. La aplicación no se conecta a equipos ni ejecuta comandos.
 
 ## Desarrollo local
 
@@ -26,7 +27,7 @@ npm run admin:create -- --local --username root
 npm run dev
 ```
 
-El comando de administrador solicita una contraseña de 12 a 128 caracteres **sin mostrarla**. No hay usuarios ni contraseñas predeterminados. También acepta `ADMIN_PASSWORD` desde el entorno para automatización segura; no guardes su valor en Git ni lo escribas en argumentos del comando. Si el usuario ya existe, el comando falla sin sobrescribirlo.
+El comando de administrador solicita una contraseña de 4 a 128 caracteres **sin mostrarla**. No hay usuarios ni contraseñas predeterminados. También acepta `ADMIN_PASSWORD` desde el entorno para automatización segura; no guardes su valor en Git ni lo escribas en argumentos del comando. Si el usuario ya existe, el comando falla sin sobrescribirlo.
 
 En Windows puedes usar PowerShell. Los scripts ejecutan el archivo JavaScript de Wrangler con Node, sin depender de archivos `.bin` específicos de Linux ni de comandos de shell para pasar argumentos. También se admiten rutas con espacios, como las de OneDrive. La integración de GitHub está configurada para ejecutar las pruebas tanto en Windows como en Linux.
 
@@ -64,13 +65,51 @@ Wrangler indica el puerto del servidor (normalmente 8787). Entra con la cuenta c
 | Preferencia/peso INTERNET BGP | `200` para único/PPL; `100` para BCK |
 | INTERNET BGP | `maximum-prefix 100 75 warning-only`, `as-override`, `remove-private-AS` |
 | Etiqueta | `CLIENTE_SUCURSAL_DAT/INT[_PPL/BCK]_ID:ACCESO:NNI3_CRM` |
-| Última milla | Siempre `UM TIGO`, aunque el TXT indique otra |
+| Última milla | Editable; se importa de las observaciones del TXT y usa `UM TIGO` como valor inicial si no viene |
 | Medio óptico | `REQUIERE SFP 1000BASEBX` |
-| Medio eléctrico | `REQUIERE CONVERSOR OPTICO ELECTRICO` |
+| Medio eléctrico | `REQUIERE CONVERSOR OPTICO/ELECTRICO` |
+
+Las descripciones de las rutas estáticas (`description` en NNI3 y `name` en NNI2) se limitan a los primeros 30 caracteres del nombre normalizado de cliente y sucursal. Las descripciones de subinterfaces y las etiquetas conservan su nombre completo.
 
 Las redes públicas de INTERNET se incluyen también en `SMTP-WHITELIST-NET` en un bloque separado para `IPTCHL1CAR201 - IPTCHL1CCRM01`. Ese bloque conserva `commit comment` según las plantillas. Revisa documento y equipo de destino antes de pegarlo. La aplicación no verifica que las VRF y políticas compartidas ya existan en la red real.
 
-Cliente y sucursal se ingresan explícitamente. Importar un nuevo TXT borra los identificadores del enlace anterior (cliente, sucursal, IASI, OT e ID), para evitar reutilizarlos por accidente. Los identificadores de configuración se normalizan a minúsculas sin acentos, con guiones bajos; la etiqueta usa mayúsculas. El bloque WAN conserva descripción original y nombre del PE, editables en **Etiquetas del bloque WAN**. Las redes LAN y públicas aceptan varias redes separadas por líneas, comas o punto y coma. Deben estar alineadas con su prefijo; se admite una ruta de host `/32`.
+Cliente y sucursal se ingresan explícitamente. Importar un nuevo TXT borra los identificadores del enlace anterior (cliente, sucursal, IASI, OT, ID y enlace a la ingeniería), para evitar reutilizarlos por accidente. Los identificadores de configuración se normalizan a minúsculas sin acentos, con guiones bajos; la etiqueta usa mayúsculas. El bloque WAN conserva descripción original y nombre del PE, editables en **Etiquetas del bloque WAN**. Las redes LAN y públicas aceptan varias redes separadas por líneas, comas o punto y coma. Se aceptan espacios alrededor de la barra, como `200.7.198.88 /30`. Deben estar alineadas con su prefijo; se admite una ruta de host `/32`.
+
+## Reglas de NNI2 MAPASINGUE
+
+| Recurso | Regla |
+| --- | --- |
+| Interfaz | `TenGigabitEthernet1/1/1`; subinterfaz `10` + VLAN para DATOS y `30` + VLAN para INTERNET |
+| Interfaz DATOS / INTERNET | `ip vrf forwarding` / `vrf forwarding`; `ip address` con máscara decimal |
+| Protección IP | `no ip redirects` y `no ip proxy-arp` |
+| DATOS | `route-map RM_<vrf>_connected permit 10` con `match interface` |
+| Monitoreo DATOS | `ip route vrf ... <ip> 255.255.255.255 ... tag 10 name <máximo 30 caracteres>` |
+| LAN | Rutas estáticas con máscara decimal, sin `tag 10`, también en enlaces BGP |
+| DATOS BGP | ASN local `19114`, `address-family ipv4 vrf`, `activate`, `as-override`, `maximum-prefix 500` |
+| INTERNET estático | Rutas de redes públicas con máscara decimal, sin tag |
+| INTERNET BGP | `ip prefix-list PL_<nombre>_ALLOWED_IPV4` con secuencias 5, 10, 15… |
+| Política de entrada | `route-map RM_internet-pccs-ncb_<nombre>_IPV4_IN permit 5` |
+| Comunidades INTERNET BGP | `19114:20 19114:21 19114:504` |
+| Preferencia y peso | `200` para único/PPL, `100` para BCK |
+| Política de salida | `RM_internet-pccs-ncb_IPV4_OUT` |
+| INTERNET BGP | `activate`, `remove-private-as`, `as-override`, `maximum-prefix 100` |
+| Etiqueta | `CLIENTE_SUCURSAL_DAT/INT[_PPL/BCK]_ID:ACCESO:NNI2_MAP` |
+| Validación de monitoreo | `sho route vrf sigmars` con la IP sin `/32` |
+
+Se mantiene el orden `DAT_BCK`, `INT_BCK`, `DAT_PPL` e `INT_PPL` en ambas soluciones, según la confirmación del usuario. El tipo PPL/BCK aparece antes del servicio en el título. NNI2 no agrega comandos de `commit` al bloque PE; el bloque SMTP separado conserva su propia sintaxis.
+
+### Actualizar una instalación existente
+
+Detén el servidor con Ctrl+C antes de actualizar:
+
+```powershell
+git pull --ff-only
+npm ci
+npm run db:migrate
+npm run dev
+```
+
+La migración `0002_history_solution.sql` agrega la solución al historial y asigna NNI3 CARMEN a los documentos anteriores. Conserva las cuentas, las contraseñas, las sesiones y los documentos. No vuelvas a crear `root` si ya existe. Los historiales nuevos muestran la solución y permiten buscar por ella.
 
 ## Pruebas
 
@@ -81,9 +120,9 @@ npm run test:integration
 CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
 ```
 
-- `test`: parser, las 12 combinaciones de servicio/enrutamiento/tipo, redes, entradas inválidas y contraseñas.
+- `test`: parser, las 24 combinaciones de solución/servicio/enrutamiento/tipo, redes, entradas inválidas y contraseñas.
 - `check`: sintaxis y empaquetado con `wrangler deploy --dry-run`; no publica.
-- `test:integration`: base temporal, migraciones, creación de administrador y Worker local. Comprueba autenticación, permisos, las cuatro variantes, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
+- `test:integration`: base temporal, migraciones, creación de administrador y Worker local. Comprueba autenticación, permisos, las ocho variantes, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
 - `test:browser`: flujo real en Chromium de escritorio/móvil, importación, variantes, descarga, historial, administración y errores JavaScript/CSP. Requiere Chromium instalado o `CHROMIUM_PATH`. Usa una base temporal. Capturas en `test-results/`, ignoradas por Git.
 
 No requieren credenciales de Cloudflare. Estas pruebas no validan comandos contra un Cisco real.

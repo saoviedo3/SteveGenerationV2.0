@@ -13,9 +13,9 @@ test('contraseñas saladas: verificación y rechazo de contraseña incorrecta', 
   assert.equal(await verifyPassword(password, 'invalido'), false);
 });
 test('límites de contraseña y tokens aleatorios no almacenados en claro', async () => {
-  assert.ok(passwordError('corta'));
+  assert.ok(passwordError('abc'));
   assert.ok(passwordError('x'.repeat(129)));
-  assert.equal(passwordError('x'.repeat(12)), null);
+  assert.equal(passwordError('x'.repeat(4)), null);
   const token = randomToken();
   assert.match(token, /^[a-f0-9]{64}$/);
   assert.notEqual(token, randomToken());
