@@ -2,6 +2,7 @@ export const SOLUTION = 'NNI3_CRM';
 export const SOLUTIONS = {
   NNI3_CRM: { label: 'NNI3 CARMEN', interface: 'TenGigE0/2/1/2' },
   NNI2_MAP: { label: 'NNI2 MAPASINGUE', interface: 'TenGigabitEthernet1/1/1' },
+  NNI_PORT: { label: 'NNI PORTOVIEJO', interface: 'GigabitEthernet0/0/0/4', routeLinkType: true },
 };
 const SEPARATOR = '/'.repeat(73);
 const clean = value => String(value ?? '').trim();
@@ -59,6 +60,7 @@ export function parseInventory(text) {
   result.service = normalize(result.service).toUpperCase();
   result.routing = /bgp/i.test(result.routing) ? 'BGP' : /estatic/i.test(normalize(result.routing)) ? 'STATIC' : '';
   if (!result.wanPe || !result.wanCpe) result.warnings.push('No se identificaron las cuatro filas WAN. Completa las direcciones manualmente.');
+  if (!/^[1-9]\d{0,8}Kbps$/i.test(clean(result.bandwidth))) result.warnings.push('El ancho de banda está incompleto; indica la política QoS (ej. 20480Kbps).');
   if (result.service === 'INTERNET') result.vrf = 'internet-pccs-ncb';
   return result;
 }
@@ -79,7 +81,7 @@ export function validate(input) {
   if (!['BGP', 'STATIC'].includes(input.routing)) errors.routing = 'Selecciona BGP o estático.';
   if (!['UNIQUE', 'PPL', 'BCK'].includes(input.linkType)) errors.linkType = 'Selecciona el tipo de enlace.';
   if (!['OPTICAL', 'ELECTRICAL'].includes(input.medium)) errors.medium = 'Selecciona óptico o eléctrico.';
-  if (!Object.hasOwn(SOLUTIONS, input.solution ?? '')) errors.solution = 'Selecciona Cisco · NNI3 CARMEN o NNI2 MAPASINGUE.';
+  if (!Object.hasOwn(SOLUTIONS, input.solution ?? '')) errors.solution = 'Selecciona una solución Cisco disponible.';
   if (clean(input.engineeringUrl)) {
     try {
       const url = new URL(clean(input.engineeringUrl));
@@ -185,7 +187,10 @@ export function generate(input) {
   const bgp = d.routing === 'BGP';
   const vrf = internet ? 'internet-pccs-ncb' : d.vrf;
   const baseName = `${slug(d.client)}_${slug(d.branch)}`;
-  const routeDescription = baseName.slice(0, 30);
+  const routeSuffix = solution.routeLinkType && d.linkType !== 'UNIQUE' ? `_${d.linkType.toLowerCase()}` : '';
+  const routeDescription = routeSuffix
+    ? `${baseName.slice(0, 30 - routeSuffix.length).replace(/_+$/, '')}${routeSuffix}`
+    : baseName.slice(0, 30);
   const description = `${baseName}_${internet ? 'int' : 'dat'}${d.linkType === 'UNIQUE' ? '' : `_${d.linkType.toLowerCase()}`}_${d.linkId}`;
   const iface = `${solution.interface}.${internet ? '30' : '10'}${Number(d.vlan)}`;
   const tag = `${description.toUpperCase()}:${d.access.toUpperCase()}:${d.solution}`;

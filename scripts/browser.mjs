@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { inventory, sample, mapSample } from '../tests/fixtures.mjs';
+import { inventory, sample, mapSample, portSample, portInventory } from '../tests/fixtures.mjs';
 import { wranglerArgs, stopProcess } from './wrangler.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'steve-browser-'));
@@ -55,7 +55,7 @@ try {
   await page.screenshot({ path: 'test-results/login-desktop.png', fullPage: true });
   await login(page, 'testroot');
   assert.ok(!(await page.locator('body').innerText()).includes('IOS XR'));
-  assert.equal(await page.locator('[name=solution] option').count(), 2);
+  assert.equal(await page.locator('[name=solution] option').count(), 3);
   await page.screenshot({ path: 'test-results/studio-empty.png', fullPage: true });
   console.log('✓ Inicio de sesión de administrador e interfaz inicial');
 
@@ -150,6 +150,56 @@ try {
   assert.ok((await page.locator('.history-item').textContent()).includes('NNI2 MAPASINGUE'));
   console.log('✓ Cuatro variantes NNI2, ingeniería, última milla editable e historial por solución');
 
+  await page.locator('.nav-item[data-view=generator]').click();
+  await page.locator('[name=solution]').selectOption('NNI_PORT');
+  await page.locator('#load-example').click();
+  assert.equal(await page.locator('[name=service]').inputValue(), 'INTERNET');
+  assert.equal(await page.locator('[name=routing]').inputValue(), 'STATIC');
+  assert.equal(await page.locator('[name=asn]').inputValue(), '');
+  assert.equal(await page.locator('[name=loopback]').inputValue(), '');
+  assert.match(await page.locator('#code-preview').textContent(), /interface GigabitEthernet0\/0\/0\/4\.303386/);
+  assert.equal(await page.locator('[name=scriptClient]').count(), 0);
+  await page.locator('#inventory-file').setInputFiles({ name: 'portoviejo.txt', mimeType: 'text/plain', buffer: Buffer.from(portInventory) });
+  await page.waitForFunction(() => document.querySelector('#import-status').textContent.includes('IMPORTADO'));
+  assert.equal(await page.locator('[name=bandwidth]').inputValue(), 'Kbps');
+  assert.ok((await page.locator('#import-message').textContent()).includes('ancho de banda'));
+  for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId', 'engineeringUrl', 'access', 'port']) await page.locator(`#config-form [name=${key}]`).fill(portSample[key]);
+  await page.locator('#download').click();
+  assert.equal(await page.locator('[name=bandwidth]').getAttribute('aria-invalid'), 'true');
+  await page.locator('[name=bandwidth]').fill('20480Kbps');
+  assert.match(await page.locator('#code-preview').textContent(), /200\.7\.207\.122\/32 GigabitEthernet0\/0\/0\/4\.303386 10\.115\.10\.238 description /);
+  assert.match(await page.locator('#tag-text').textContent(), /ASOCIACION_MEDICA_RENAL_PORTOVIEJO_ASMERP_OFICINA_1_INT_10073838:ESTADIO_PORTOVIEJO_6150:NNI_PORT/);
+  const portDownloading = page.waitForEvent('download');
+  await page.locator('#download').click();
+  const portDownload = await portDownloading;
+  const portContent = await readFile(await portDownload.path(), 'utf8');
+  assert.ok(portContent.includes('object-group network ipv4 SMTP-WHITELIST-NET\r\n200.7.207.122/32'));
+  await page.screenshot({ path: 'test-results/portoviejo-desktop.png', fullPage: true });
+  await page.locator('[name=routing]').selectOption('BGP');
+  assert.equal(await page.locator('#code-preview').isVisible(), false);
+  await page.locator('[name=asn]').fill('64877');
+  await page.locator('[name=linkType][value=BCK]').check();
+  assert.match(await page.locator('#code-preview').textContent(), /set local-preference 100/);
+  assert.match(await page.locator('#code-preview').textContent(), /prefix-set PS_asociacion_medica_renal_portoviejo_asmerp_oficina_1_int_bck_10073838_ALLOWED_IPV4/);
+  await page.locator('[name=service]').selectOption('DATOS');
+  assert.equal(await page.locator('[name=vrf]').inputValue(), '');
+  await page.locator('[name=vrf]').fill('test_datos');
+  await page.locator('[name=loopback]').fill('192.0.2.1/32');
+  assert.match(await page.locator('#code-preview').textContent(), /interface GigabitEthernet0\/0\/0\/4\.103386/);
+  assert.match(await page.locator('#code-preview').textContent(), /default_policy_pass_all in/);
+  await page.locator('[name=routing]').selectOption('STATIC');
+  const portStatic = await page.locator('#code-preview').textContent();
+  assert.ok(!portStatic.includes('router bgp'));
+  const route = portStatic.split('\n').find(line => line.includes('192.0.2.1/32 GigabitEthernet'));
+  assert.ok(route.endsWith('_bck'));
+  assert.ok(route.split(' description ')[1].length <= 30);
+  await page.locator('.nav-item[data-view=history]').click();
+  await page.locator('#history-search').fill('PORTOVIEJO');
+  await page.locator('.history-item').waitFor();
+  assert.equal(await page.locator('.history-item').count(), 1);
+  assert.ok((await page.locator('.history-item').textContent()).includes('NNI PORTOVIEJO'));
+  console.log('✓ Cuatro variantes Portoviejo, AB obligatorio, sufijo BCK, SMTP y descarga /32');
+
   await page.locator('#users-nav').click();
   await page.locator('#create-user-form [name=username]').fill('colleague');
   await page.locator('#create-user-form [name=password]').fill('abc');
@@ -167,6 +217,7 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('.nav-item[data-view=generator]').click();
+  await page.locator('[name=solution]').selectOption('NNI_PORT');
   await page.locator('#load-example').click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
   await page.screenshot({ path: 'test-results/studio-mobile.png', fullPage: true });

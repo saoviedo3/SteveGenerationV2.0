@@ -267,9 +267,18 @@ $('#load-example').addEventListener('click', () => {
     loopback: '10.116.104.86/32', wanNetwork: '10.115.9.84', wanPe: '10.115.9.85', wanCpe: '10.115.9.86', wanBroadcast: '10.115.9.87',
     wanLabel: 'BANCO DEL PACIFICO GYE PLAZA GUAYARTE DATOS BCKDATOS', peName: 'IPTCHL3MAPA02',
   });
+  if (solution === 'NNI_PORT') Object.assign(example, {
+    service: 'INTERNET', routing: 'STATIC', client: 'ASOCIACION MEDICA RENAL PORTOVIEJO ASMERP', branch: 'OFICINA 1',
+    iasi: '132487-1-1', linkId: '10073838', workOrder: 'CHG0510785', access: 'ESTADIO_PORTOVIEJO_6150',
+    port: 'OIGE8[0-1-1]-GE:4', bandwidth: '20480Kbps', vlan: '3386', vrf: 'internet-pccs-ncb',
+    asn: '', loopback: '', publicNetworks: '200.7.207.122/32', medium: 'ELECTRICAL',
+    wanNetwork: '10.115.10.236', wanPe: '10.115.10.237', wanCpe: '10.115.10.238', wanBroadcast: '10.115.10.239',
+    wanLabel: 'ASOCIACION MEDICA RENAL PORTOVIEJO ASMERP OFICINA 1 INT INTERNET', peName: 'IPTCHL3PORC02',
+    engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@D378_MANABI_RED-AG-O_SERV-INT',
+  });
   for (const [key, value] of Object.entries(example)) form.elements[key].value = value;
-  lastService = 'DATOS';
-  datosVrf = example.vrf;
+  lastService = example.service;
+  datosVrf = example.service === 'DATOS' ? example.vrf : '';
   $('#inventory-text').value = '';
   message('#import-message', 'Ejemplo cargado. Estos datos son de demostración; reemplázalos para un enlace real.');
   $('#import-message').className = 'import-message';

@@ -29,6 +29,46 @@ export const mapInternetSample = {
   engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@C072_GUAY_BACKUP_DRN-BPAPO-BCK_SERV-IBCK',
 };
 
+export const portSample = {
+  ...sample, solution: 'NNI_PORT', service: 'INTERNET', routing: 'STATIC',
+  iasi: '132487-1-1', client: 'ASOCIACION MEDICA RENAL PORTOVIEJO ASMERP', branch: 'OFICINA 1',
+  linkId: '10073838', workOrder: 'CHG0510785', access: 'ESTADIO_PORTOVIEJO_6150', port: 'OIGE8[0-1-1]-GE:4',
+  bandwidth: '20480Kbps', vlan: '3386', vrf: 'internet-pccs-ncb', publicNetworks: '200.7.207.122/32',
+  wanNetwork: '10.115.10.236', wanPe: '10.115.10.237', wanCpe: '10.115.10.238', wanBroadcast: '10.115.10.239',
+  wanLabel: 'ASOCIACION MEDICA RENAL PORTOVIEJO ASMERP OFICINA 1 INT INTERNET', peName: 'IPTCHL3PORC02',
+  medium: 'ELECTRICAL', asn: '', loopback: '',
+  engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@D378_MANABI_RED-AG-O_SERV-INT',
+};
+
+export const portInventory = `-----------------------------
+
+SERVICIO: INTERNET
+ACCESO:
+PUERTO:
+AB: Kbps
+VLAN: 3386
+VRF: ()
+ENRUTAMIENTO:
+ASN:
+LOOPBACK MONITOREO:
+RED PUBLICA: 200.7.207.122 /32
+RED LAN:
+SOURCE TUNEL (LOOPBACK PE):
+DESTINATION TUNEL (IP SIM CARD):
+IMSI SIM CARD:
+RED WAN:
+
+ASOCIACION MEDICA RENAL PORTOVIEJO ASMERP OFICINA 1 INT INTERNET           10.115.10.236   Red
+ASOCIACION MEDICA RENAL PORTOVIEJO ASMERP OFICINA 1 INT INTERNET           10.115.10.237   IPTCHL3PORC02
+ASOCIACION MEDICA RENAL PORTOVIEJO ASMERP OFICINA 1 INT INTERNET           10.115.10.238   CLIENTE
+ASOCIACION MEDICA RENAL PORTOVIEJO ASMERP OFICINA 1 INT INTERNET           10.115.10.239   Broadcast
+
+/////////////////////////////////////////////////////////////////////////
+RESPONSABLE: Steven Alejandro Oviedo Buitron
+OBSERVACIONES:
+UM TIGO
+`;
+
 export const inventory = `FARMACIAS Y COMISARIATOS DE MEDICINAS SA FARCOMED
 -----------------------------
 SERVICIO:  DATOS

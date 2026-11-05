@@ -1,10 +1,10 @@
 # Steve Generation
 
-Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco · NNI3 CARMEN y NNI2 MAPASINGUE**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiqueta ZTE, script y validaciones.
+Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco · NNI3 CARMEN, NNI2 MAPASINGUE y NNI PORTOVIEJO**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiqueta ZTE, script y validaciones.
 
 ## Funciones
 
-- DATOS BGP, DATOS estático, INTERNET BGP e INTERNET estático en NNI3 CARMEN y NNI2 MAPASINGUE: ocho plantillas.
+- DATOS BGP, DATOS estático, INTERNET BGP e INTERNET estático en NNI3 CARMEN, NNI2 MAPASINGUE y NNI PORTOVIEJO: doce plantillas.
 - Enlace único, principal (PPL) y respaldo (BCK); medio óptico o eléctrico.
 - Importación `.txt` por archivo, arrastre o texto pegado. UTF-8 y Windows-1252; máximo 256 KB. El archivo original se procesa en el navegador y no se sube al servidor.
 - Validación de VLAN, ASN, IPv4, redes CIDR y las cuatro direcciones de una WAN `/30`.
@@ -96,7 +96,30 @@ Cliente y sucursal se ingresan explícitamente. Importar un nuevo TXT borra los 
 | Etiqueta | `CLIENTE_SUCURSAL_DAT/INT[_PPL/BCK]_ID:ACCESO:NNI2_MAP` |
 | Validación de monitoreo | `sho route vrf sigmars` con la IP sin `/32` |
 
-Se mantiene el orden `DAT_BCK`, `INT_BCK`, `DAT_PPL` e `INT_PPL` en ambas soluciones, según la confirmación del usuario. El tipo PPL/BCK aparece antes del servicio en el título. NNI2 no agrega comandos de `commit` al bloque PE; el bloque SMTP separado conserva su propia sintaxis.
+Se mantiene el orden `DAT_BCK`, `INT_BCK`, `DAT_PPL` e `INT_PPL` en las tres soluciones, según la confirmación del usuario. El tipo PPL/BCK aparece antes del servicio en el título. NNI2 no agrega comandos de `commit` al bloque PE; el bloque SMTP separado conserva su propia sintaxis.
+
+## Reglas de NNI PORTOVIEJO
+
+Portoviejo comparte las cuatro plantillas de CARMEN y utiliza `GigabitEthernet0/0/0/4` como interfaz base. Se selecciona desde **Solución** y se identifica como `NNI_PORT` en la etiqueta y el historial.
+
+| Recurso | Regla |
+| --- | --- |
+| DATOS | Subinterfaz `10` + VLAN; VRF del enlace; loopback de monitoreo obligatoria |
+| INTERNET | Subinterfaz `30` + VLAN; VRF fija `internet-pccs-ncb` |
+| VLAN 3386 del ejemplo | `.103386` en DATOS y `.303386` en INTERNET |
+| ASN local | `19114`, igual que CARMEN |
+| BGP | Mismas políticas, comunidades, límites y preferencias de CARMEN; `200` para Internet único/PPL y `100` para BCK |
+| Rutas estáticas | Cliente y sucursal normalizados; en enlaces PPL/BCK se reserva espacio para `_ppl` o `_bck` dentro del máximo de 30 caracteres |
+| Etiqueta | `CLIENTE_SUCURSAL_DAT/INT[_PPL/BCK]_ID:ACCESO:NNI_PORT` |
+| SMTP en INTERNET | Configuración en bloque separado y validación de `SMTP-WHITELIST-NET`, incluso para redes públicas `/32` |
+
+Se usa el mismo cliente y sucursal del formulario para los nombres. No se agrega un campo abreviado ni se deducen siglas a partir del nombre completo. Para las rutas, se recorta el nombre cuando sea necesario; la etiqueta y la descripción de la subinterfaz conservan el nombre completo del enlace. Los nombres de las rutas de CARMEN y MAPASINGUE mantienen sus reglas anteriores.
+
+Las decisiones confirmadas después del ejemplo prevalecen: Internet usa `.303386`, la descripción de ruta no incluye servicio ni ID y el documento sí lleva el bloque SMTP. Se conserva la estructura del script de CARMEN, incluido `show commit changes diff`.
+
+**Cargar ejemplo** en Portoviejo prepara el caso de Internet estático con `20480Kbps`. No rellena ASN ni loopback de otras soluciones: si cambias a BGP o DATOS, debes completar los recursos correspondientes. Al importar un TXT con `AB: Kbps`, la aplicación avisa que falta el ancho de banda y bloquea la generación hasta que lo completes; no deduce la velocidad.
+
+Esta incorporación usa la columna de solución existente y no requiere una migración adicional a `0002_history_solution.sql`. Los usuarios y documentos guardados se conservan.
 
 ### Actualizar una instalación existente
 
@@ -120,9 +143,9 @@ npm run test:integration
 CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
 ```
 
-- `test`: parser, las 24 combinaciones de solución/servicio/enrutamiento/tipo, redes, entradas inválidas y contraseñas.
+- `test`: parser, las 36 combinaciones de solución/servicio/enrutamiento/tipo, redes, entradas inválidas y contraseñas.
 - `check`: sintaxis y empaquetado con `wrangler deploy --dry-run`; no publica.
-- `test:integration`: base temporal, migraciones, creación de administrador y Worker local. Comprueba autenticación, permisos, las ocho variantes, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
+- `test:integration`: base temporal, migraciones, creación de administrador y Worker local. Comprueba autenticación, permisos, las doce variantes, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
 - `test:browser`: flujo real en Chromium de escritorio/móvil, importación, variantes, descarga, historial, administración y errores JavaScript/CSP. Requiere Chromium instalado o `CHROMIUM_PATH`. Usa una base temporal. Capturas en `test-results/`, ignoradas por Git.
 
 No requieren credenciales de Cloudflare. Estas pruebas no validan comandos contra un Cisco real.
