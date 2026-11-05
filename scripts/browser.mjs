@@ -31,9 +31,10 @@ async function login(page, username) {
 }
 
 try {
+  run(process.execPath, ['scripts/build-pages.mjs']);
   run(process.execPath, wranglerArgs(['d1', 'migrations', 'apply', 'steve-generation', '--local', '--persist-to', persistence]));
   run(process.execPath, ['scripts/create-admin.mjs', '--local', '--username', 'testroot', '--persist-to', persistence], { ADMIN_PASSWORD: password });
-  server = spawn(process.execPath, wranglerArgs(['dev', '--ip', '127.0.0.1', '--port', port, '--persist-to', persistence]), { env, stdio: ['ignore', 'pipe', 'pipe'] });
+  server = spawn(process.execPath, wranglerArgs(['pages', 'dev', '--ip', '127.0.0.1', '--port', port, '--persist-to', persistence]), { env, stdio: ['ignore', 'pipe', 'pipe'] });
   server.stdout.on('data', chunk => { logs += chunk; });
   server.stderr.on('data', chunk => { logs += chunk; });
   let ready = false;

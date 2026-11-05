@@ -58,7 +58,16 @@ async function login(request, env) {
     const row = await env.DB.prepare('INSERT INTO login_attempts (key, attempts, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET attempts = CASE WHEN window_start < ? THEN 1 ELSE attempts + 1 END, window_start = CASE WHEN window_start < ? THEN excluded.window_start ELSE window_start END RETURNING attempts').bind(keys[i], now, now - 900, now - 900).first();
     if (row.attempts > (i === 0 ? 30 : 10)) return json({ error: 'Demasiados intentos. Intenta de nuevo en 15 minutos.' }, 429, { 'Retry-After': '900' });
   }
-  const user = await env.DB.prepare('SELECT * FROM users WHERE username = ?').bind(username).first();
+  let user = await env.DB.prepare('SELECT * FROM users WHERE username = ?').bind(username).first();
+  // Pages' native secret lets the owner initialize a fresh production database
+  // through the normal login screen without putting a password in Git or chat.
+  if (!user && username === 'root' && typeof env.INITIAL_ADMIN_PASSWORD === 'string' && !passwordError(env.INITIAL_ADMIN_PASSWORD)) {
+    const existing = await env.DB.prepare('SELECT id FROM users LIMIT 1').first();
+    if (!existing && await tokenHash(data.password) === await tokenHash(env.INITIAL_ADMIN_PASSWORD)) {
+      await env.DB.prepare("INSERT INTO users (id, username, password_hash, role) SELECT ?, 'root', ?, 'admin' WHERE NOT EXISTS (SELECT 1 FROM users)").bind(crypto.randomUUID(), await hashPassword(data.password)).run();
+      user = await env.DB.prepare('SELECT * FROM users WHERE username = ?').bind(username).first();
+    }
+  }
   // A dummy PBKDF2 hash keeps unknown-user and wrong-password work comparable.
   const saved = user?.password_hash || 'pbkdf2-sha256$100000$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000';
   const valid = await verifyPassword(data.password, saved);

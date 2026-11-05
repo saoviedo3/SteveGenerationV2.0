@@ -13,6 +13,7 @@ const env = { ...process.env, XDG_CONFIG_HOME: join(directory, 'config'), WRANGL
 const port = process.env.TEST_PORT || '8791';
 const origin = `http://127.0.0.1:${port}`;
 const password = `!${randomBytes(1).toString('hex')}?`; // Exercise the requested four-character minimum.
+const bootstrapPassword = randomBytes(24).toString('hex');
 let server;
 let logs = '';
 let checks = 0;
@@ -32,15 +33,9 @@ async function request(path, { method = 'GET', data, cookie, originHeader = orig
 async function check(name, action) { await action(); checks++; console.log(`✓ ${name}`); }
 
 try {
+  run(process.execPath, ['scripts/build-pages.mjs']);
   run(process.execPath, wranglerArgs(['d1', 'migrations', 'apply', 'steve-generation', '--local', '--persist-to', persistence]));
-  run(process.execPath, ['scripts/create-admin.mjs', '--local', '--username', 'testroot', '--persist-to', persistence], { ADMIN_PASSWORD: password });
-  await check('CLI informa un administrador duplicado sin revelar la contraseña', async () => {
-    const duplicate = spawnSync(process.execPath, ['scripts/create-admin.mjs', '--local', '--username', 'testroot', '--persist-to', persistence], { env: { ...env, ADMIN_PASSWORD: password }, encoding: 'utf8' });
-    assert.equal(duplicate.status, 1);
-    assert.ok(duplicate.stderr.includes('Wrangler terminó con código'));
-    assert.ok(!`${duplicate.stdout}${duplicate.stderr}`.includes(password));
-  });
-  server = spawn(process.execPath, wranglerArgs(['dev', '--ip', '127.0.0.1', '--port', port, '--persist-to', persistence]), { env, stdio: ['ignore', 'pipe', 'pipe'] });
+  server = spawn(process.execPath, wranglerArgs(['pages', 'dev', '--ip', '127.0.0.1', '--port', port, '--persist-to', persistence, '--binding', `INITIAL_ADMIN_PASSWORD=${bootstrapPassword}`]), { env, stdio: ['ignore', 'pipe', 'pipe'] });
   server.stdout.on('data', chunk => { logs += chunk; });
   server.stderr.on('data', chunk => { logs += chunk; });
   let ready = false;
@@ -56,6 +51,34 @@ try {
   let secondCookie;
   let firstId;
   let entryId;
+  let bootstrapId;
+  let bootstrapCookie;
+  await check('Pages inicializa root solo con el secreto correcto y la base vacía', async () => {
+    assert.equal((await request('/login', { method: 'POST', data: { username: 'other-admin', password: bootstrapPassword } })).status, 401);
+    assert.equal((await request('/login', { method: 'POST', data: { username: 'root', password: 'incorrecta' } })).status, 401);
+    const login = await request('/login', { method: 'POST', data: { username: 'root', password: bootstrapPassword } });
+    assert.equal(login.status, 200);
+    assert.equal(login.data.user.role, 'admin');
+    bootstrapId = login.data.user.id;
+    bootstrapCookie = login.cookie;
+    assert.equal((await request('/users', { cookie: bootstrapCookie })).data.users.length, 1);
+  });
+  await check('el secreto inicial no restablece una contraseña que ya se cambió', async () => {
+    assert.equal((await request('/password', { method: 'POST', cookie: bootstrapCookie, data: { currentPassword: bootstrapPassword, password } })).status, 200);
+    assert.equal((await request('/login', { method: 'POST', data: { username: 'root', password: bootstrapPassword } })).status, 401);
+    assert.equal((await request('/login', { method: 'POST', data: { username: 'root', password } })).status, 200);
+  });
+  run(process.execPath, ['scripts/create-admin.mjs', '--local', '--username', 'testroot', '--persist-to', persistence], { ADMIN_PASSWORD: password });
+  run(process.execPath, wranglerArgs(['d1', 'execute', 'steve-generation', '--local', '--persist-to', persistence, '--command', `DELETE FROM users WHERE id = '${bootstrapId}';`]));
+  await check('el bootstrap no agrega un administrador a una base con usuarios existentes', async () => {
+    assert.equal((await request('/login', { method: 'POST', data: { username: 'root', password: bootstrapPassword } })).status, 401);
+  });
+  await check('CLI informa un administrador duplicado sin revelar la contraseña', async () => {
+    const duplicate = spawnSync(process.execPath, ['scripts/create-admin.mjs', '--local', '--username', 'testroot', '--persist-to', persistence], { env: { ...env, ADMIN_PASSWORD: password }, encoding: 'utf8' });
+    assert.equal(duplicate.status, 1);
+    assert.ok(duplicate.stderr.includes('Wrangler terminó con código'));
+    assert.ok(!`${duplicate.stdout}${duplicate.stderr}`.includes(password));
+  });
   await check('assets y cabeceras de seguridad', async () => {
     const response = await fetch(origin);
     assert.equal(response.status, 200);
@@ -168,10 +191,10 @@ try {
     assert.equal(last.status, 429);
     assert.equal(last.headers.get('retry-after'), '900');
   });
-  console.log(`\n${checks} comprobaciones de integración pasaron con Worker y D1 locales.`);
+  console.log(`\n${checks} comprobaciones de integración pasaron con Pages y D1 locales.`);
 } catch (error) {
-  console.error(error);
-  console.error(logs.slice(-5000));
+  console.error(error instanceof Error ? error.message.replaceAll(bootstrapPassword, '[redacted]') : error);
+  console.error(logs.slice(-5000).replaceAll(bootstrapPassword, '[redacted]'));
   process.exitCode = 1;
 } finally {
   await stopProcess(server);

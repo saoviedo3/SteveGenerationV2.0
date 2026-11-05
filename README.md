@@ -194,48 +194,95 @@ CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
 ```
 
 - `test`: parser, las 60 combinaciones de solución/servicio/enrutamiento/tipo, redes, entradas inválidas y contraseñas.
-- `check`: sintaxis y empaquetado con `wrangler deploy --dry-run`; no publica.
-- `test:integration`: base temporal, migraciones, creación de administrador y Worker local. Comprueba autenticación, permisos, las veinte variantes, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
+- `check`: sintaxis y compilación del módulo avanzado de Pages en `dist/_worker.js`; no publica.
+- `test:integration`: base temporal, migraciones, creación de administrador y Pages local con su módulo compilado. Comprueba también la inicialización segura del primer root, autenticación, permisos y las veinte variantes, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
 - `test:browser`: flujo real en Chromium de escritorio/móvil, importación, variantes, descarga, historial, copia individual de etiquetas PWHE, administración y errores JavaScript/CSP. Requiere Chromium instalado o `CHROMIUM_PATH`. Usa una base temporal. Capturas en `test-results/`, ignoradas por Git.
 
 No requieren credenciales de Cloudflare. Estas pruebas no validan comandos contra un Cisco real.
 
-## Publicar en Cloudflare Workers + D1
+## Publicar en Cloudflare Pages + D1
 
-Un **Worker con assets estáticos** sirve web y API bajo el mismo origen; no requiere Pages separado. Se puede usar Workers Free y D1 Free sin servidor de pago, dentro de las cuotas de Cloudflare. Al superarlas, el servicio puede dejar de responder hasta reiniciarse la cuota. Esta configuración no contrata planes de pago ni garantiza uso ilimitado.
+La aplicación está preparada para **Pages en modo avanzado**: `npm run build` copia la web a `dist/` y compila la API en `dist/_worker.js`. Pages aporta el binding `ASSETS`; D1 utiliza el binding `DB`. No se necesita un Worker separado. La API, las cookies y la web comparten el mismo origen.
 
-1. Crea una cuenta Cloudflare con Workers y D1 gratuitos. En una terminal autorizada:
+La carpeta `dist/` es generada e ignorada por Git. No se deben arrastrar solamente los archivos de `public/` al panel de Pages: el paquete completo requiere `_worker.js` y su binding D1.
 
-   ```bash
-   npx wrangler login
-   npx wrangler d1 create steve-generation
-   ```
+Pages Functions y D1 se pueden usar en sus niveles gratuitos dentro de las cuotas de Cloudflare. La configuración no contrata planes de pago ni garantiza uso ilimitado.
 
-2. Sustituye el `database_id` de ceros en `wrangler.jsonc` por el ID devuelto. Mantén el binding `DB` y nombre de la base. Ese ID es configuración, no una contraseña.
+### Preparación de la cuenta
 
-3. Prepara producción y crea tu administrador:
+Si despliegas desde tu PC, autentica Wrangler con `npx wrangler login`. Desde un entorno autorizado también puedes utilizar `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID`. El token requiere **Account → Cloudflare Pages → Edit** y **Account → D1 → Edit**, limitados a la cuenta elegida. Guárdalo como secreto; nunca en Git ni en el chat.
 
-   ```bash
-   npm run db:migrate:remote
-   npm run admin:create -- --remote --username root
-   ```
+Crea una base D1 para producción:
 
-4. Publica:
+```bash
+npx wrangler d1 create steve-generation
+```
 
-   ```bash
-   npm run deploy
-   ```
+Sustituye únicamente `database_id` en `wrangler.jsonc` por el UUID devuelto. El `preview_database_id` de ceros se conserva como identificador del emulador local para seguir usando los datos existentes de `.wrangler/state`. No es una base remota de preview. El ID de cuenta y el UUID de D1 son identificadores, no contraseñas.
 
-5. Abre la dirección HTTPS asignada por Cloudflare, inicia sesión y crea las cuentas de tus compañeros en **Usuarios**. Las bases local y remota no comparten usuarios ni historial.
+Aplica las migraciones de producción:
 
-### Despliegue automático desde GitHub
+```bash
+npm run db:migrate:remote
+```
 
-`.github/workflows/ci.yml` ejecuta pruebas en pushes y pull requests. En un push a `main`, aplica migraciones y publica **solo si** están configurados estos secretos de GitHub Actions:
+La base de producción es independiente de tu PC. Las migraciones crean el esquema, sin copiar automáticamente cuentas o documentos locales. No se elimina la base local.
 
-- `CLOUDFLARE_API_TOKEN`: token con permisos de edición de Workers Scripts y D1 para la cuenta elegida.
-- `CLOUDFLARE_ACCOUNT_ID`: ID de esa cuenta.
+### Primera publicación mediante Wrangler
 
-Guárdalos en GitHub → Settings → Secrets and variables → Actions; nunca en archivos. Primero configura el `database_id`, la base y el administrador. Sin secretos se ejecuta CI y se omite el despliegue. El workflow no crea cuentas de Cloudflare ni planes de pago.
+La rama actual de la aplicación es **`codex/steve-generation-v1`**. Se utiliza también como rama de producción del proyecto Pages:
+
+```bash
+npx wrangler pages project create steve-generation --production-branch codex/steve-generation-v1
+```
+
+El nombre del proyecto debe coincidir con `name` en `wrangler.jsonc`. Si ya tienes un proyecto, utiliza su nombre y comprueba sus bindings antes de publicar.
+
+Para elegir tu contraseña inicial de producción sin compartirla, configúrala como secreto nativo de Pages:
+
+```bash
+npx wrangler pages secret put INITIAL_ADMIN_PASSWORD --project-name steve-generation
+```
+
+Wrangler solicita el valor de forma privada. Debe tener entre 4 y 128 caracteres. Alternativamente, puedes crear el administrador directamente con `npm run admin:create -- --remote --username root`; ambas opciones respetan las cuentas existentes.
+
+Publica el paquete completo:
+
+```bash
+npm run deploy
+```
+
+Wrangler devolverá la URL real del despliegue. La publicación no se considera verificada solo por compilar: comprueba la página de acceso, el login y una generación con historial en la URL publicada.
+
+### Primer acceso de root
+
+Con una base vacía y `INITIAL_ADMIN_PASSWORD` configurado, abre el sitio e ingresa como **root** con esa contraseña. La cuenta se crea únicamente después de comprobar la contraseña y solo si no existe ningún usuario. No hay registro público ni una contraseña predeterminada.
+
+El secreto inicial no agrega otro administrador a una base con usuarios y no restablece una contraseña que ya se cambió. Puedes eliminarlo desde los secretos de Pages después del primer acceso; la cuenta queda almacenada con su hash en D1.
+
+Si el despliegue se prepara desde este entorno, el secreto gestionado `PAGES_INITIAL_ADMIN_PASSWORD` se utiliza únicamente para enviar el valor a Cloudflare como `INITIAL_ADMIN_PASSWORD`. No se incorpora al código, los argumentos de los comandos ni los archivos del proyecto.
+
+### Actualizaciones automáticas desde GitHub
+
+El workflow `.github/workflows/ci.yml` ejecuta pruebas en Windows y Linux. Un push a **`codex/steve-generation-v1`** también aplica migraciones remotas y publica en Pages cuando están configurados estos secretos en **GitHub → Settings → Secrets and variables → Actions**:
+
+- `CLOUDFLARE_API_TOKEN`: permisos de edición de Pages y D1 para esa cuenta.
+- `CLOUDFLARE_ACCOUNT_ID`: ID de la cuenta.
+
+Los secretos del entorno de Codex y los de GitHub Actions son configuraciones independientes. Sin los secretos en GitHub, se ejecutan las pruebas y se omite la publicación. El workflow nunca crea ni modifica contraseñas de usuarios. La base y el proyecto Pages se preparan antes de activar la publicación automática.
+
+Si prefieres la integración nativa de Pages con GitHub, crea el proyecto como proyecto conectado a Git desde el panel de Cloudflare, con estos ajustes:
+
+| Ajuste | Valor |
+| --- | --- |
+| Repositorio | `saoviedo3/SteveGenerationV2.0` |
+| Rama de producción | `codex/steve-generation-v1` |
+| Framework | None |
+| Comando de build | `npm run build` |
+| Directorio de salida | `dist` |
+| Node | 24 |
+
+Configura antes el UUID real de D1 en el repositorio y el secreto inicial de Pages. Los proyectos Direct Upload y los conectados a Git tienen flujos diferentes; el workflow de GitHub Actions permite automatizar los Direct Upload sin una integración nativa.
 
 ## Datos y acceso
 
@@ -249,7 +296,7 @@ El administrador gestiona cuentas; su historial también está limitado a sus pr
 public/               Interfaz y generador compartido con el servidor
 worker/               API, autenticación y acceso a D1
 migrations/           Esquema SQL versionado
-scripts/              Administrador y pruebas funcionales
+scripts/              Build de Pages, administrador y pruebas funcionales
 tests/                Ejemplos y pruebas de reglas
 wrangler.jsonc        Configuración de Cloudflare
 ```

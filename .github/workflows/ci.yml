@@ -32,7 +32,7 @@ jobs:
 
   deploy:
     needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/steve-generation-v1'
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -44,11 +44,11 @@ jobs:
           node-version-file: .node-version
           cache: npm
       - run: npm ci
-      - name: Deploy if Cloudflare is configured
+      - name: Deploy Pages if Cloudflare is configured
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         run: |
           npm run db:migrate:remote
           npm run deploy
       - name: Cloudflare setup pending
         if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
-        run: echo 'CI passed. Add the Cloudflare secrets and configure D1 to enable deployment.'
+        run: echo 'CI passed. Add the Cloudflare secrets in GitHub Actions and configure D1 to enable Pages deployment.'

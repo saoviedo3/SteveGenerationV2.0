@@ -4,20 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --ip 0.0.0.0",
+    "build": "node scripts/build-pages.mjs",
+    "dev": "npm run build && wrangler pages dev --ip 0.0.0.0 --port 8787",
     "db:migrate": "wrangler d1 migrations apply steve-generation --local",
     "db:migrate:remote": "wrangler d1 migrations apply steve-generation --remote",
     "admin:create": "node scripts/create-admin.mjs",
     "test": "node --test --test-isolation=none tests/*.test.mjs",
     "test:integration": "node scripts/integration.mjs",
     "test:browser": "node scripts/browser.mjs",
-    "check": "node --check worker/index.js && node --check public/app.js && wrangler deploy --dry-run",
-    "deploy": "wrangler deploy"
+    "check": "node --check worker/index.js && node --check public/app.js && npm run build && node --check dist/_worker.js",
+    "deploy": "npm run build && wrangler pages deploy --branch codex/steve-generation-v1"
   },
   "engines": {
     "node": ">=24"
   },
   "devDependencies": {
+    "esbuild": "0.28.2",
     "playwright-core": "1.58.2",
     "wrangler": "4.157.0"
   }
