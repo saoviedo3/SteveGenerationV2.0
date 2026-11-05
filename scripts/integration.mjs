@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { sample, mapSample, mapInternetSample, portSample } from '../tests/fixtures.mjs';
+import { sample, mapSample, mapInternetSample, portSample, pwheSample } from '../tests/fixtures.mjs';
 import { wranglerArgs, stopProcess } from './wrangler.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'steve-integration-'));
@@ -92,6 +92,7 @@ try {
   await check('generación validada en servidor y descarga recuperable', async () => {
     assert.equal((await request('/history', { method: 'POST', cookie: firstCookie, data: { ...sample, vlan: '9999' } })).status, 422);
     assert.equal((await request('/history', { method: 'POST', cookie: firstCookie, data: { ...portSample, bandwidth: 'Kbps' } })).status, 422);
+    assert.equal((await request('/history', { method: 'POST', cookie: firstCookie, data: { ...pwheSample, infineraIp: '' } })).status, 422);
     const result = await request('/history', { method: 'POST', cookie: firstCookie, data: sample });
     assert.equal(result.status, 201);
     assert.ok(result.data.document.includes('remote-as 64877'));
@@ -99,19 +100,29 @@ try {
     const stored = await request(`/history/${entryId}`, { cookie: firstCookie });
     assert.equal(stored.data.item.document, result.data.document);
   });
-  await check('las doce variantes se generan y guardan con su solución', async () => {
-    for (const solution of ['NNI3_CRM', 'NNI2_MAP', 'NNI_PORT']) for (const service of ['DATOS', 'INTERNET']) for (const routing of ['BGP', 'STATIC']) {
+  await check('las dieciséis variantes se generan y guardan con su solución', async () => {
+    for (const solution of ['NNI3_CRM', 'NNI2_MAP', 'NNI_PORT', 'CARRETAS_PWHE3']) for (const service of ['DATOS', 'INTERNET']) for (const routing of ['BGP', 'STATIC']) {
       let input = solution === 'NNI3_CRM' ? sample : service === 'DATOS' ? mapSample : mapInternetSample;
       if (solution === 'NNI_PORT') input = { ...portSample, vrf: 'test_datos', loopback: '192.0.2.1/32', asn: '64877' };
+      if (solution === 'CARRETAS_PWHE3') input = { ...pwheSample, vrf: 'test_datos', loopback: '192.0.2.1/32', asn: '65437' };
       const result = await request('/history', { method: 'POST', cookie: firstCookie, data: { ...input, solution, service, routing, engineeringUrl: mapSample.engineeringUrl, lastMile: 'UM TELEFONICA' } });
       assert.equal(result.status, 201);
       assert.equal(result.data.document.includes('router bgp 19114'), routing === 'BGP');
       assert.ok(result.data.document.includes('OBSERVACIONES:\nUM TELEFONICA'));
       assert.ok(result.data.document.includes(mapSample.engineeringUrl));
+      if (solution === 'CARRETAS_PWHE3') {
+        assert.equal(result.data.document.match(/^interface PW-Ether\d+$/gm).length, 2);
+        assert.ok(result.data.document.includes('IPTCHL3CAR205 (10.116.254.32)'));
+        assert.ok(result.data.document.includes('IPTCHL3CAR203 (10.116.254.29)'));
+        const stored = (await request(`/history/${result.data.id}`, { cookie: firstCookie })).data.item;
+        assert.equal(stored.document, result.data.document);
+        assert.equal(stored.solution, 'CARRETAS_PWHE3');
+      }
     }
     const items = (await request('/history', { cookie: firstCookie })).data.items;
     assert.equal(items.filter(item => item.solution === 'NNI_PORT').length, 4);
     assert.equal(items.filter(item => item.solution === 'NNI2_MAP').length, 4);
+    assert.equal(items.filter(item => item.solution === 'CARRETAS_PWHE3').length, 4);
   });
   await check('aislamiento del historial, incluso frente al administrador', async () => {
     assert.equal((await request('/history', { cookie: secondCookie })).data.items.length, 0);
@@ -119,7 +130,7 @@ try {
       assert.equal((await request(`/history/${entryId}`, { cookie })).status, 404);
       assert.equal((await request(`/history/${entryId}`, { method: 'DELETE', cookie })).status, 404);
     }
-    assert.equal((await request('/history', { cookie: firstCookie })).data.items.length, 13);
+    assert.equal((await request('/history', { cookie: firstCookie })).data.items.length, 17);
   });
   await check('cambio de contraseña comprueba la actual', async () => {
     assert.equal((await request('/password', { method: 'POST', cookie: firstCookie, data: { currentPassword: password, password: 'abc' } })).status, 400);

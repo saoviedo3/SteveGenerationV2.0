@@ -69,6 +69,46 @@ OBSERVACIONES:
 UM TIGO
 `;
 
+export const pwheInventory = `BLUECARD ECUADOR S.A
+-----------------------------
+SERVICIO: INTERNET
+ACCESO:
+PUERTO:
+AB: 153600Kbps
+VLAN:
+VRF: ()
+ENRUTAMIENTO:
+ASN:
+LOOPBACK MONITOREO:
+RED PUBLICA: 200.24.222.8 /29
+RED LAN:
+SOURCE TUNEL (LOOPBACK PE):
+DESTINATION TUNEL (IP SIM CARD):
+IMSI SIM CARD:
+RED WAN:
+
+BLUECARD UIO MATRIZ INT PPL INTERNET           10.112.50.108   Red
+BLUECARD UIO MATRIZ INT PPL INTERNET           10.112.50.109   IPTCHL3CAR205 - IPTCHL3CAR203
+BLUECARD UIO MATRIZ INT PPL INTERNET           10.112.50.110   CLIENTE
+BLUECARD UIO MATRIZ INT PPL INTERNET           10.112.50.111   Broadcast
+
+/////////////////////////////////////////////////////////////////////////
+RESPONSABLE: Steven Alejandro Oviedo Buitron
+OBSERVACIONES:
+UM TIGO
+REQUIERE SFP 1000BASEBX
+`;
+
+export const pwheSample = {
+  ...sample, solution: 'CARRETAS_PWHE3', service: 'INTERNET', routing: 'STATIC', linkType: 'PPL',
+  iasi: '131149-3-1', client: 'BLUECARD', branch: 'UIO MATRIZ', linkId: '10062910', workOrder: 'CHG0501038',
+  access: 'N3059 - Finlandia_DRX30 - N-PE', port: 'GE13/2/4', bandwidth: '153600Kbps', vlan: '0600',
+  vrf: 'internet-pccs-ncb', publicNetworks: '200.24.222.8/29', infineraIp: '10.73.32.159',
+  wanNetwork: '10.112.21.200', wanPe: '10.112.21.201', wanCpe: '10.112.21.202', wanBroadcast: '10.112.21.203',
+  peName: 'IPTCHL3CAR205 - IPTCHL3CAR203', wanLabel: 'BLUECARD UIO MATRIZ INT PPL INTERNET', asn: '', loopback: '',
+  engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@BLUC_PICH_RED-UIO-M_SERV-INT-PPL',
+};
+
 export const inventory = `FARMACIAS Y COMISARIATOS DE MEDICINAS SA FARCOMED
 -----------------------------
 SERVICIO:  DATOS

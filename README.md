@@ -1,10 +1,10 @@
 # Steve Generation
 
-Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco · NNI3 CARMEN, NNI2 MAPASINGUE y NNI PORTOVIEJO**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiqueta ZTE, script y validaciones.
+Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco · NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO y PWHE CARRETAS**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiqueta ZTE, script y validaciones.
 
 ## Funciones
 
-- DATOS BGP, DATOS estático, INTERNET BGP e INTERNET estático en NNI3 CARMEN, NNI2 MAPASINGUE y NNI PORTOVIEJO: doce plantillas.
+- DATOS BGP, DATOS estático, INTERNET BGP e INTERNET estático en NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO y PWHE CARRETAS: dieciséis plantillas.
 - Enlace único, principal (PPL) y respaldo (BCK); medio óptico o eléctrico.
 - Importación `.txt` por archivo, arrastre o texto pegado. UTF-8 y Windows-1252; máximo 256 KB. El archivo original se procesa en el navegador y no se sube al servidor.
 - Validación de VLAN, ASN, IPv4, redes CIDR y las cuatro direcciones de una WAN `/30`.
@@ -96,7 +96,7 @@ Cliente y sucursal se ingresan explícitamente. Importar un nuevo TXT borra los 
 | Etiqueta | `CLIENTE_SUCURSAL_DAT/INT[_PPL/BCK]_ID:ACCESO:NNI2_MAP` |
 | Validación de monitoreo | `sho route vrf sigmars` con la IP sin `/32` |
 
-Se mantiene el orden `DAT_BCK`, `INT_BCK`, `DAT_PPL` e `INT_PPL` en las tres soluciones, según la confirmación del usuario. El tipo PPL/BCK aparece antes del servicio en el título. NNI2 no agrega comandos de `commit` al bloque PE; el bloque SMTP separado conserva su propia sintaxis.
+Se mantiene el orden `DAT_BCK`, `INT_BCK`, `DAT_PPL` e `INT_PPL` en las cuatro soluciones, según la confirmación del usuario. El tipo PPL/BCK aparece antes del servicio en el título. NNI2 no agrega comandos de `commit` al bloque PE; el bloque SMTP separado conserva su propia sintaxis.
 
 ## Reglas de NNI PORTOVIEJO
 
@@ -121,6 +121,35 @@ Las decisiones confirmadas después del ejemplo prevalecen: Internet usa `.30338
 
 Esta incorporación usa la columna de solución existente y no requiere una migración adicional a `0002_history_solution.sql`. Los usuarios y documentos guardados se conservan.
 
+## Reglas de PWHE CARRETAS
+
+La solución `CARRETAS_PWHE3` genera un bloque completo para **IPTCHL3CAR205 (10.116.254.32)** y otro para **IPTCHL3CAR203 (10.116.254.29)**. Ambos incluyen interfaz PWHE, xconnect y el enrutamiento correspondiente. El bloque SMTP de INTERNET queda separado para los equipos indicados en su encabezado.
+
+| Recurso con VLAN 0600 | INTERNET | DATOS |
+| --- | --- | --- |
+| Interfaz en ambos PE | `PW-Ether20600` | `PW-Ether10600` |
+| PW-ID en IPTCHL3CAR205 | `200600` | `100600` |
+| PW-ID en IPTCHL3CAR203 | `210600` | `110600` |
+| VRF | `internet-pccs-ncb` | La del enlace |
+| Monitoreo | No requerido | Loopback `/32` obligatoria |
+
+La VLAN se completa a **cuatro dígitos**: `600` y `0600` generan el mismo resultado. Se mantienen sus ceros en el encabezado, los identificadores y las validaciones. El rango válido sigue siendo 1–4094.
+
+- Se ingresa la **IP del equipo Infinera**, usada como vecino en ambos pseudowires. Importar otro TXT borra ese campo para evitar reutilizar el vecino del enlace anterior.
+- Se mantienen `mtu 2014`, `attach generic-interface-list PWHE-InterAS-Infinera`, `xconnect group EoMPLS_PWHE_Infinera` y `pw-class EoMPLS_Fusion_Infinera`.
+- Las descripciones terminan con `--- L3-PWHE-PRI` y `--- L3-PWHE-BCK`. Estos roles de los PE son independientes de que el enlace del cliente sea único, PPL o BCK: siempre se generan ambos PE.
+- El p2p usa automáticamente los primeros **16 caracteres** de `cliente_sucursal` normalizado. No hay otro campo editable para este nombre. Se usa también para los nombres cortos de las etiquetas PRI/BCK y la descripción del vecino BGP.
+- El campo **Acceso** se conserva completo en el encabezado. Con el formato `N3059 - Finlandia_DRX30 - N-PE`, las etiquetas utilizan `Finlandia_DRX30`. Si ingresas solo el nombre del equipo, se usa tal cual. Se conserva su capitalización en las etiquetas PWHE.
+- Las tres etiquetas se incluyen en el TXT y tienen botones de copia individuales: `CARRETAS_PWHE3`, `CARR_PWHE3_PRI` y `CARR_PWHE3_BCK`.
+- DATOS estático enruta monitoreo y LAN; DATOS BGP mantiene esas rutas y utiliza las políticas `default_policy_pass_all`, `maximum-prefix 500 75` y `as-override`, como CARMEN.
+- INTERNET estático enruta las redes públicas y LAN. INTERNET BGP utiliza prefix-set y política IN con sufijo `_IPV4_IN`, comunidades **`(19114:10, 19114:11, 19114:504)`**, `maximum-prefix 100 75 warning-only`, `as-override` y `remove-private-AS`. Conserva rutas LAN estáticas si se ingresan.
+- La preferencia local y el peso de INTERNET BGP son **200** para único/PPL y **100** para BCK, aplicados en ambos PE. La política de salida es `RP_internet-pccs-ncb_IPV4_OUT` y el ASN local es `19114`.
+- Las descripciones de rutas estáticas llevan cliente y sucursal con máximo 30 caracteres. El comentario SMTP también se genera desde cliente y sucursal, sin reutilizar nombres ajenos al enlace.
+
+Las direcciones WAN siempre se toman del TXT y de sus correcciones manuales. El archivo de origen del ejemplo contiene `10.112.50.108/30`, mientras que el resultado de referencia usa `10.112.21.200/30`: la aplicación no convierte una red en otra. **Cargar ejemplo** utiliza los valores del resultado de referencia; al importar el TXT se conservan los del archivo, incluido el nombre compuesto `IPTCHL3CAR205 - IPTCHL3CAR203`.
+
+En PWHE, las validaciones del PE se aplican en ambos equipos. Las validaciones SMTP se ejecutan en los equipos del bloque SMTP. Esta solución usa la columna de historial existente y no requiere migraciones nuevas.
+
 ### Actualizar una instalación existente
 
 Detén el servidor con Ctrl+C antes de actualizar:
@@ -143,10 +172,10 @@ npm run test:integration
 CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
 ```
 
-- `test`: parser, las 36 combinaciones de solución/servicio/enrutamiento/tipo, redes, entradas inválidas y contraseñas.
+- `test`: parser, las 48 combinaciones de solución/servicio/enrutamiento/tipo, redes, entradas inválidas y contraseñas.
 - `check`: sintaxis y empaquetado con `wrangler deploy --dry-run`; no publica.
-- `test:integration`: base temporal, migraciones, creación de administrador y Worker local. Comprueba autenticación, permisos, las doce variantes, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
-- `test:browser`: flujo real en Chromium de escritorio/móvil, importación, variantes, descarga, historial, administración y errores JavaScript/CSP. Requiere Chromium instalado o `CHROMIUM_PATH`. Usa una base temporal. Capturas en `test-results/`, ignoradas por Git.
+- `test:integration`: base temporal, migraciones, creación de administrador y Worker local. Comprueba autenticación, permisos, las dieciséis variantes, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
+- `test:browser`: flujo real en Chromium de escritorio/móvil, importación, variantes, descarga, historial, copia individual de etiquetas PWHE, administración y errores JavaScript/CSP. Requiere Chromium instalado o `CHROMIUM_PATH`. Usa una base temporal. Capturas en `test-results/`, ignoradas por Git.
 
 No requieren credenciales de Cloudflare. Estas pruebas no validan comandos contra un Cisco real.
 

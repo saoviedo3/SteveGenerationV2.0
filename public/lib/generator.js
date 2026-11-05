@@ -3,6 +3,7 @@ export const SOLUTIONS = {
   NNI3_CRM: { label: 'NNI3 CARMEN', interface: 'TenGigE0/2/1/2' },
   NNI2_MAP: { label: 'NNI2 MAPASINGUE', interface: 'TenGigabitEthernet1/1/1' },
   NNI_PORT: { label: 'NNI PORTOVIEJO', interface: 'GigabitEthernet0/0/0/4', routeLinkType: true },
+  CARRETAS_PWHE3: { label: 'PWHE CARRETAS', interface: 'PW-Ether', pwhe: true },
 };
 const SEPARATOR = '/'.repeat(73);
 const clean = value => String(value ?? '').trim();
@@ -45,7 +46,7 @@ export function parseInventory(text) {
       } else if (/^(RESPONSABLE|OBSERVACIONES)$/.test(key)) inWan = false;
     }
     if (inWan) {
-      const row = /^\s*(.*?)\s+(\d{1,3}(?:\.\d{1,3}){3})\s+(\S+)\s*$/.exec(line);
+      const row = /^\s*(.*?)\s+(\d{1,3}(?:\.\d{1,3}){3})\s+(.+?)\s*$/.exec(line);
       if (row) result.wanRows.push({ label: row[1].trim().replace(/\s+/g, ' '), ip: row[2], role: row[3] });
     }
     if (inObservations && /^\s*UM\s+\S/i.test(line)) result.lastMile = line.trim().replace(/\s+/g, ' ');
@@ -58,6 +59,8 @@ export function parseInventory(text) {
   result.wanLabel = result.wanRows[0]?.label ?? '';
   result.peName = result.wanRows.find(row => row.ip === result.wanPe)?.role ?? '';
   result.service = normalize(result.service).toUpperCase();
+  const serviceRole = /^(DATOS|INTERNET)\s+(PPL|BCK)$/.exec(result.service);
+  if (serviceRole) { result.service = serviceRole[1]; result.linkType = serviceRole[2]; }
   result.routing = /bgp/i.test(result.routing) ? 'BGP' : /estatic/i.test(normalize(result.routing)) ? 'STATIC' : '';
   if (!result.wanPe || !result.wanCpe) result.warnings.push('No se identificaron las cuatro filas WAN. Completa las direcciones manualmente.');
   if (!/^[1-9]\d{0,8}Kbps$/i.test(clean(result.bandwidth))) result.warnings.push('El ancho de banda está incompleto; indica la política QoS (ej. 20480Kbps).');
@@ -67,7 +70,8 @@ export function parseInventory(text) {
 
 export function validate(input) {
   const errors = {};
-  for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId', 'access', 'port', 'bandwidth', 'vlan', 'responsible', 'vrf', 'asn', 'loopback', 'publicNetworks', 'lanNetworks', 'peName', 'wanLabel', 'wanNetwork', 'wanPe', 'wanCpe', 'wanBroadcast', 'lastMile', 'engineeringUrl']) {
+  const pwhe = input.solution === 'CARRETAS_PWHE3';
+  for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId', 'access', 'port', 'bandwidth', 'vlan', 'responsible', 'vrf', 'asn', 'loopback', 'publicNetworks', 'lanNetworks', 'peName', 'wanLabel', 'wanNetwork', 'wanPe', 'wanCpe', 'wanBroadcast', 'lastMile', 'engineeringUrl', 'infineraIp']) {
     if (input[key] !== undefined && typeof input[key] !== 'string') errors[key] = 'El valor debe ser texto.';
   }
   const required = { iasi: 'IASI', client: 'Cliente', branch: 'Sucursal', workOrder: 'Orden de trabajo', linkId: 'ID del enlace', access: 'Equipo de acceso', port: 'Tarjeta y puerto', bandwidth: 'Ancho de banda', vlan: 'VLAN', responsible: 'Responsable' };
@@ -76,7 +80,12 @@ export function validate(input) {
     if (/[\r\n\x00-\x1f\x7f]/.test(String(input[key] ?? '')) || clean(input[key]).length > 180) errors[key] = 'Usa una sola línea de hasta 180 caracteres.';
   }
   for (const key of ['client', 'branch']) if (clean(input[key]) && !slug(input[key])) errors[key] = 'Introduce un nombre con letras o números.';
-  for (const key of ['iasi', 'workOrder', 'linkId', 'access']) if (clean(input[key]) && !/^[a-zA-Z0-9_.-]+$/.test(clean(input[key]))) errors[key] = 'Usa letras, números, punto, guion o guion bajo.';
+  for (const key of ['iasi', 'workOrder', 'linkId', ...(!pwhe ? ['access'] : [])]) if (clean(input[key]) && !/^[a-zA-Z0-9_.-]+$/.test(clean(input[key]))) errors[key] = 'Usa letras, números, punto, guion o guion bajo.';
+  if (pwhe) {
+    if (clean(input.access) && !/^[a-zA-Z0-9_. -]+$/.test(clean(input.access))) errors.access = 'Usa letras, números, espacios, puntos, guiones o guiones bajos.';
+    if (ipv4Number(clean(input.infineraIp)) === null) errors.infineraIp = 'Introduce la IP IPv4 del equipo Infinera.';
+    if (!/^\d{1,4}$/.test(clean(input.vlan))) errors.vlan = 'Introduce una VLAN de hasta cuatro dígitos.';
+  }
   if (!['DATOS', 'INTERNET'].includes(input.service)) errors.service = 'Selecciona DATOS o INTERNET.';
   if (!['BGP', 'STATIC'].includes(input.routing)) errors.routing = 'Selecciona BGP o estático.';
   if (!['UNIQUE', 'PPL', 'BCK'].includes(input.linkType)) errors.linkType = 'Selecciona el tipo de enlace.';
@@ -114,23 +123,58 @@ function decimalMask(prefix) {
   return [24, 16, 8, 0].map(shift => Math.floor(mask / 2 ** shift) % 256).join('.');
 }
 
-function carmenScript(c) {
-  const { d, iface, description, bandwidth, vrf, staticNets, routeDescription, internet, bgp, publicNets, baseName } = c;
+function carmenRouting(c) {
+  const { d, iface, description, vrf, staticNets, routeDescription, internet, bgp, publicNets, baseName } = c;
   const prefixSet = `PS_${description}_ALLOWED_IPV4`;
-  const policy = `RP_internet-pccs-ncb_${description}_IPv4_IN`;
-  const script = ['!', `interface ${iface}`, ` description --- ${description} ---`, ` service-policy input ${bandwidth}`, ` service-policy output ${bandwidth}`, ` vrf ${vrf}`, ` ipv4 address ${d.wanPe} 255.255.255.252`, ` encapsulation dot1q ${Number(d.vlan)}`, 'exit', '!'];
+  const policy = `RP_internet-pccs-ncb_${description}_${c.policySuffix ?? 'IPv4_IN'}`;
+  const script = [];
   if (staticNets.length) script.push('router static', ` vrf ${vrf}`, '  address-family ipv4 unicast', ...staticNets.map(net => `   ${net} ${iface} ${d.wanCpe} description ${routeDescription}`), '   !', '  !', ' !', '!');
   if (bgp && internet) {
     const preference = d.linkType === 'BCK' ? 100 : 200;
-    script.push(`prefix-set ${prefixSet}`, `  ${publicNets.join(',\n  ')}`, 'end-set', '!', `route-policy ${policy}`, `  if (destination in ${prefixSet}) then`, '    set community (19114:20, 19114:21, 19114:504)', `    set local-preference ${preference}`, `    set weight ${preference}`, '  endif', 'end-policy', '!');
+    script.push(`prefix-set ${prefixSet}`, `  ${publicNets.join(',\n  ')}`, 'end-set', '!', `route-policy ${policy}`, `  if (destination in ${prefixSet}) then`, `    set community ${c.communities ?? '(19114:20, 19114:21, 19114:504)'}`, `    set local-preference ${preference}`, `    set weight ${preference}`, '  endif', 'end-policy', '!');
   }
-  if (bgp) script.push('router bgp 19114', ` vrf ${vrf}`, `  neighbor ${d.wanCpe}`, `   remote-as ${d.asn}`, `   description ${baseName}`, '   address-family ipv4 unicast', `    maximum-prefix ${internet ? '100 75 warning-only' : '500 75'}`, `    route-policy ${internet ? policy : 'default_policy_pass_all'} in`, `    route-policy ${internet ? 'RP_internet-pccs-ncb_IPV4_OUT' : 'default_policy_pass_all'} out`, '    as-override', ...(internet ? ['    remove-private-AS'] : []), '   !', '  !', ' !', '!');
-  script.push('show commit changes diff');
+  if (bgp) script.push('router bgp 19114', ` vrf ${vrf}`, `  neighbor ${d.wanCpe}`, `   remote-as ${d.asn}`, `   description ${c.neighborDescription ?? baseName}`, '   address-family ipv4 unicast', `    maximum-prefix ${internet ? '100 75 warning-only' : '500 75'}`, `    route-policy ${internet ? policy : 'default_policy_pass_all'} in`, `    route-policy ${internet ? 'RP_internet-pccs-ncb_IPV4_OUT' : 'default_policy_pass_all'} out`, '    as-override', ...(internet ? ['    remove-private-AS'] : []), '   !', '  !', ' !', '!');
   const checks = [
     ...(bgp ? [`sho run router bgp 19114 vrf ${vrf} neighbor ${d.wanCpe}`] : []),
     ...(bgp && internet ? [`sho run prefix-set ${prefixSet}`, `sho run route-policy ${policy}`] : []),
   ];
   return { script, checks };
+}
+
+function carmenScript(c) {
+  const { d, iface, description, bandwidth, vrf } = c;
+  const routing = carmenRouting(c);
+  const script = ['!', `interface ${iface}`, ` description --- ${description} ---`, ` service-policy input ${bandwidth}`, ` service-policy output ${bandwidth}`, ` vrf ${vrf}`, ` ipv4 address ${d.wanPe} 255.255.255.252`, ` encapsulation dot1q ${Number(d.vlan)}`, 'exit', '!', ...routing.script, 'show commit changes diff'];
+  return { script, checks: routing.checks };
+}
+
+function pwheScript(c) {
+  const { d, iface, description, bandwidth, vrf, internet, p2p, vlan } = c;
+  const routing = carmenRouting({
+    ...c, communities: '(19114:10, 19114:11, 19114:504)', policySuffix: 'IPV4_IN', neighborDescription: p2p,
+  });
+  const peers = [
+    { name: 'IPTCHL3CAR205', ip: '10.116.254.32', role: 'PRI', pwId: `${internet ? '20' : '10'}${vlan}`, neighbor: 'neighbor ipv4' },
+    { name: 'IPTCHL3CAR203', ip: '10.116.254.29', role: 'BCK', pwId: `${internet ? '21' : '11'}${vlan}`, neighbor: 'neighbor' },
+  ];
+  const line = '-'.repeat(74);
+  const script = [];
+  for (const peer of peers) {
+    script.push(
+      line, `${peer.name} (${peer.ip}) - ${peer.pwId}`, line,
+      `interface ${iface}`, ` description --- ${description} --- L3-PWHE-${peer.role}`,
+      ' mtu 2014', ` service-policy input ${bandwidth}`, ` service-policy output ${bandwidth}`,
+      ` vrf ${vrf}`, ` ipv4 address ${d.wanPe} 255.255.255.252`,
+      ' attach generic-interface-list PWHE-InterAS-Infinera', '!',
+      'l2vpn', ' xconnect group EoMPLS_PWHE_Infinera', `  p2p ${p2p}`, `   interface ${iface}`,
+      `   ${peer.neighbor} ${d.infineraIp} pw-id ${peer.pwId}`, '    pw-class EoMPLS_Fusion_Infinera', '!', '',
+      line, `ENRUTAMIENTO - ${peer.name}`, line, ...routing.script, '',
+    );
+  }
+  return {
+    script,
+    checks: [`sho run l2vpn xconnect group EoMPLS_PWHE_Infinera p2p ${p2p}`, ...routing.checks],
+  };
 }
 
 function mapasingueScript(c) {
@@ -183,6 +227,7 @@ export function generate(input) {
   if (Object.keys(errors).length) return { errors };
   const d = Object.fromEntries(Object.entries(input).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]));
   const solution = SOLUTIONS[d.solution];
+  const pwhe = Boolean(solution.pwhe);
   const internet = d.service === 'INTERNET';
   const bgp = d.routing === 'BGP';
   const vrf = internet ? 'internet-pccs-ncb' : d.vrf;
@@ -192,8 +237,17 @@ export function generate(input) {
     ? `${baseName.slice(0, 30 - routeSuffix.length).replace(/_+$/, '')}${routeSuffix}`
     : baseName.slice(0, 30);
   const description = `${baseName}_${internet ? 'int' : 'dat'}${d.linkType === 'UNIQUE' ? '' : `_${d.linkType.toLowerCase()}`}_${d.linkId}`;
-  const iface = `${solution.interface}.${internet ? '30' : '10'}${Number(d.vlan)}`;
-  const tag = `${description.toUpperCase()}:${d.access.toUpperCase()}:${d.solution}`;
+  const vlan = pwhe ? String(Number(d.vlan)).padStart(4, '0') : String(Number(d.vlan));
+  const iface = pwhe ? `PW-Ether${internet ? '2' : '1'}${vlan}` : `${solution.interface}.${internet ? '30' : '10'}${Number(d.vlan)}`;
+  const p2p = baseName.slice(0, 16);
+  const equipment = pwhe ? (/^.+?\s+-\s+([A-Za-z0-9_.-]+)\s+-\s+N-PE$/i.exec(d.access)?.[1] ?? d.access) : d.access.toUpperCase();
+  const shortDescription = `${p2p}_${internet ? 'int' : 'dat'}${d.linkType === 'UNIQUE' ? '' : `_${d.linkType.toLowerCase()}`}_${d.linkId}`;
+  const tags = [{ label: 'Enlace', value: `${description.toUpperCase()}:${equipment}:${d.solution}` }];
+  if (pwhe) tags.push(
+    { label: 'PWHE principal · IPTCHL3CAR205', value: `${shortDescription.toUpperCase()}:${equipment}:CARR_PWHE3_PRI` },
+    { label: 'PWHE respaldo · IPTCHL3CAR203', value: `${shortDescription.toUpperCase()}:${equipment}:CARR_PWHE3_BCK` },
+  );
+  const tag = tags.map(item => item.value).join('\n');
   const publicNets = networks(d.publicNetworks);
   const lanNets = networks(d.lanNetworks);
   const staticNets = [...new Set([...(internet ? (!bgp ? publicNets : []) : [d.loopback]), ...lanNets])];
@@ -203,8 +257,8 @@ export function generate(input) {
   const wanRows = [[d.wanNetwork, 'Red'], [d.wanPe, d.peName || 'PE'], [d.wanCpe, 'CLIENTE'], [d.wanBroadcast, 'Broadcast']].map(([ip, role]) => `${wanLabel.padEnd(45)} ${ip.padEnd(15)} ${role}`).join('\n');
   const header = [
     title, '', ...(d.engineeringUrl ? [d.engineeringUrl] : []), '-----------------------------', '', d.workOrder,
-    `ID: ${d.linkId}`, `SERVICIO: ${d.service}`, `ACCESO: ${d.access}`, `PUERTO: ${d.port}`,
-    `AB: ${bandwidth}`, `VLAN: ${Number(d.vlan)}`, `VRF: ${vrf}`, `ENRUTAMIENTO: ${bgp ? 'BGP' : 'ESTATICO'}`,
+    `ID: ${d.linkId}`, `SERVICIO: ${d.service}${pwhe && d.linkType !== 'UNIQUE' ? ` ${d.linkType}` : ''}`, `ACCESO: ${d.access}`, `PUERTO: ${d.port}`,
+    `AB: ${bandwidth}`, `VLAN: ${vlan}`, `VRF: ${vrf}`, `ENRUTAMIENTO: ${bgp ? 'BGP' : 'ESTATICO'}`,
     ...(bgp ? [`ASN: ${d.asn}`] : []),
     ...(internet ? [`RED PUBLICA: ${publicNets.join(', ')}`] : [`LOOPBACK MONITOREO: ${d.loopback}`]),
     `RED LAN: ${lanNets.join(', ')}`, 'RED WAN:', '', wanRows, '', tag, SEPARATOR, '',
@@ -212,17 +266,17 @@ export function generate(input) {
     d.medium === 'OPTICAL' ? 'REQUIERE SFP 1000BASEBX' : 'REQUIERE CONVERSOR OPTICO/ELECTRICO',
     '', SEPARATOR, 'Script:', '',
   ];
-  const context = { d, internet, bgp, vrf, baseName, routeDescription, description, iface, bandwidth, staticNets, publicNets };
-  const generated = d.solution === 'NNI2_MAP' ? mapasingueScript(context) : carmenScript(context);
+  const context = { d, internet, bgp, vrf, baseName, routeDescription, description, iface, bandwidth, staticNets, publicNets, p2p, vlan };
+  const generated = pwhe ? pwheScript(context) : d.solution === 'NNI2_MAP' ? mapasingueScript(context) : carmenScript(context);
   const whitelist = internet ? ['', '////////// IPTCHL1CAR201 - IPTCHL1CCRM01 //////////', '', 'object-group network ipv4 SMTP-WHITELIST-NET', ...publicNets, 'sh comm cha dif', `commit comment ${baseName}`, 'end'] : [];
   const monitorFilter = d.solution === 'NNI2_MAP' ? d.loopback?.split('/')[0] : d.loopback;
   const checks = [
-    `sho run interface ${iface}`, `sho int desc | in ${Number(d.vlan)}`, `sho run | in ${d.wanCpe}`,
+    `sho run interface ${iface}`, `sho int desc | in ${vlan}`, `sho run | in ${d.wanCpe}`,
     ...generated.checks, '',
     ...(!internet ? [`sho route vrf sigmars | in ${monitorFilter}`] : publicNets.map(net => `sho route vrf ${vrf} | in ${net}`)),
     ...lanNets.map(net => `sho route vrf ${vrf} | in ${net}`),
     ...(internet ? ['', ...publicNets.map(net => `sh runn object-group network ipv4 SMTP-WHITELIST-NET | inc ${net}`)] : []),
   ];
-  const document = [...header, ...generated.script, ...whitelist, '', SEPARATOR, 'VALIDACIONES:', '', ...checks, '', SEPARATOR, 'CONFIGURADO:', ''].join('\n');
-  return { errors: {}, title, description, tag, interface: iface, solution: d.solution, solutionLabel: solution.label, script: generated.script.join('\n'), validations: checks.join('\n'), document, filename: `${d.iasi}_${description}.txt` };
+  const document = [...header, ...generated.script, ...whitelist, '', SEPARATOR, 'VALIDACIONES:', ...(pwhe ? ['Aplicar estas validaciones en IPTCHL3CAR205 e IPTCHL3CAR203.'] : []), '', ...checks, '', SEPARATOR, 'CONFIGURADO:', ''].join('\n');
+  return { errors: {}, title, description, tag, tags, interface: iface, solution: d.solution, solutionLabel: solution.label, script: generated.script.join('\n'), validations: checks.join('\n'), document, filename: `${d.iasi}_${description}.txt` };
 }

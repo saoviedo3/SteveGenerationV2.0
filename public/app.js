@@ -14,6 +14,7 @@ let deleteId = null;
 let toastTimer;
 let lastService = 'DATOS';
 let datosVrf = '';
+let renderedPwheTags = '';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -145,6 +146,7 @@ function values() { return Object.fromEntries(new FormData(form)); }
 function syncFields() {
   const internet = form.elements.service.value === 'INTERNET';
   const bgp = form.elements.routing.value === 'BGP';
+  const pwhe = Boolean(SOLUTIONS[form.elements.solution.value].pwhe);
   if (internet && lastService !== 'INTERNET') datosVrf = form.elements.vrf.value;
   if (!internet && lastService === 'INTERNET') form.elements.vrf.value = datosVrf;
   lastService = form.elements.service.value;
@@ -153,6 +155,11 @@ function syncFields() {
   $('#asn-field').hidden = !bgp;
   $('#loopback-field').hidden = internet;
   $('#public-field').hidden = !internet;
+  $('#infinera-field').hidden = !pwhe;
+  form.elements.infineraIp.required = pwhe;
+  $('.review-note').textContent = pwhe
+    ? `Revisa los bloques de IPTCHL3CAR205 e IPTCHL3CAR203: cada uno incluye su enrutamiento.${internet ? ' El bloque SMTP se aplica por separado en los equipos indicados.' : ''}`
+    : 'Revisa el documento antes de aplicarlo. El bloque SMTP se ejecuta por separado en los equipos indicados.';
   $('.workflow-label').textContent = `CISCO / ${SOLUTIONS[form.elements.solution.value].label}`;
 }
 function renderErrors(errors) {
@@ -194,8 +201,27 @@ function update() {
   $('#code-preview').hidden = !valid;
   $('#code-preview').textContent = valid ? current[previewMode] : '';
   $('#code-filename').textContent = valid ? current.filename : 'configuracion.txt';
-  $('#tag-box').hidden = !valid;
+  const pwhe = Boolean(SOLUTIONS[form.elements.solution.value].pwhe);
+  $('#tag-box').hidden = !valid || pwhe;
   $('#tag-text').textContent = valid ? current.tag : '';
+  $('#pwhe-tags').hidden = !valid || !pwhe;
+  const tagSignature = valid && pwhe ? JSON.stringify(current.tags) : '';
+  if (tagSignature !== renderedPwheTags) {
+    // Keep copy buttons mounted when an input's blur fires an unchanged change event.
+    $('#pwhe-tags').replaceChildren();
+    if (valid && pwhe) for (const item of current.tags) {
+      const row = element('div', 'tag-box');
+      const button = element('button');
+      button.type = 'button';
+      button.title = `Copiar etiqueta: ${item.label}`;
+      button.setAttribute('aria-label', button.title);
+      button.append(icon('copy'));
+      button.addEventListener('click', () => copy(item.value, `Etiqueta copiada: ${item.label}.`));
+      row.append(element('label', '', item.label), element('code', '', item.value), button);
+      $('#pwhe-tags').append(row);
+    }
+    renderedPwheTags = tagSignature;
+  }
   $('#interface-summary').textContent = valid ? current.interface : `${SOLUTIONS[form.elements.solution.value].label} · Cisco`;
 }
 form.addEventListener('input', update);
@@ -222,10 +248,11 @@ function importText(text, filename = 'Texto importado') {
   const parsed = parseInventory(text);
   if (!parsed.service && !parsed.bandwidth && !parsed.wanRows.length) throw new Error('No se reconocieron recursos de Network Inventory. Revisa el contenido del TXT.');
   // A new source must not inherit identifiers from a previous or demo link.
-  for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId', 'engineeringUrl']) form.elements[key].value = '';
+  for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId', 'engineeringUrl', 'infineraIp']) form.elements[key].value = '';
   for (const key of ['access', 'port', 'bandwidth', 'vlan', 'vrf', 'asn', 'loopback', 'publicNetworks', 'lanNetworks', 'responsible', 'wanNetwork', 'wanPe', 'wanCpe', 'wanBroadcast', 'wanLabel', 'peName', 'lastMile']) form.elements[key].value = parsed[key] ?? '';
   if (['DATOS', 'INTERNET'].includes(parsed.service)) form.elements.service.value = parsed.service;
   if (parsed.routing) form.elements.routing.value = parsed.routing;
+  if (parsed.linkType) form.elements.linkType.value = parsed.linkType;
   lastService = form.elements.service.value;
   datosVrf = lastService === 'DATOS' ? form.elements.vrf.value : '';
   $('#import-status').textContent = '✓ IMPORTADO';
@@ -259,7 +286,7 @@ $('#dropzone').addEventListener('drop', event => importFile(event.dataTransfer.f
 
 $('#load-example').addEventListener('click', () => {
   const solution = form.elements.solution.value;
-  const example = { solution, service: 'DATOS', routing: 'BGP', linkType: 'UNIQUE', medium: 'OPTICAL', client: 'FARCOMED', branch: 'SS MALDONADO', iasi: '124906-36-1', linkId: '10066459', workOrder: 'CRQ000000190789', access: 'PRADERA_GUASMO_6150', port: 'OIGE8[0-1-7] GE: 8', bandwidth: '10240Kbps', vlan: '3230', vrf: 'econofarm_datos', asn: '64877', loopback: '10.116.101.128/32', publicNetworks: '10.115.3.200/29', lanNetworks: '', responsible: 'Steven Alejandro Oviedo Buitron', wanNetwork: '10.115.3.204', wanPe: '10.115.3.205', wanCpe: '10.115.3.206', wanBroadcast: '10.115.3.207', wanLabel: 'FARCOMED SANA SANA MALDONADO DATOS', peName: 'IPTCHL3CCRM03', lastMile: 'UM TIGO', engineeringUrl: '' };
+  const example = { solution, service: 'DATOS', routing: 'BGP', linkType: 'UNIQUE', medium: 'OPTICAL', client: 'FARCOMED', branch: 'SS MALDONADO', iasi: '124906-36-1', linkId: '10066459', workOrder: 'CRQ000000190789', access: 'PRADERA_GUASMO_6150', port: 'OIGE8[0-1-7] GE: 8', bandwidth: '10240Kbps', vlan: '3230', vrf: 'econofarm_datos', asn: '64877', loopback: '10.116.101.128/32', publicNetworks: '10.115.3.200/29', lanNetworks: '', responsible: 'Steven Alejandro Oviedo Buitron', wanNetwork: '10.115.3.204', wanPe: '10.115.3.205', wanCpe: '10.115.3.206', wanBroadcast: '10.115.3.207', wanLabel: 'FARCOMED SANA SANA MALDONADO DATOS', peName: 'IPTCHL3CCRM03', lastMile: 'UM TIGO', engineeringUrl: '', infineraIp: '' };
   if (solution === 'NNI2_MAP') Object.assign(example, {
     client: 'BCO PACIFICO', branch: 'GYE PLAZA GUAYARTE', iasi: '130763-4-1', linkId: '10072843',
     workOrder: 'CHG0510792', access: 'U_CATOLICA_GYE_GWT_6150', port: 'OIGE8[0-1-7] GE: 4',
@@ -275,6 +302,15 @@ $('#load-example').addEventListener('click', () => {
     wanNetwork: '10.115.10.236', wanPe: '10.115.10.237', wanCpe: '10.115.10.238', wanBroadcast: '10.115.10.239',
     wanLabel: 'ASOCIACION MEDICA RENAL PORTOVIEJO ASMERP OFICINA 1 INT INTERNET', peName: 'IPTCHL3PORC02',
     engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@D378_MANABI_RED-AG-O_SERV-INT',
+  });
+  if (solution === 'CARRETAS_PWHE3') Object.assign(example, {
+    service: 'INTERNET', routing: 'STATIC', linkType: 'PPL', client: 'BLUECARD', branch: 'UIO MATRIZ',
+    iasi: '131149-3-1', linkId: '10062910', workOrder: 'CHG0501038', access: 'N3059 - Finlandia_DRX30 - N-PE',
+    port: 'GE13/2/4', bandwidth: '153600Kbps', vlan: '0600', vrf: 'internet-pccs-ncb',
+    asn: '', loopback: '', publicNetworks: '200.24.222.8/29', infineraIp: '10.73.32.159',
+    wanNetwork: '10.112.21.200', wanPe: '10.112.21.201', wanCpe: '10.112.21.202', wanBroadcast: '10.112.21.203',
+    wanLabel: 'BLUECARD UIO MATRIZ INT PPL INTERNET', peName: 'IPTCHL3CAR205 - IPTCHL3CAR203',
+    engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@BLUC_PICH_RED-UIO-M_SERV-INT-PPL',
   });
   for (const [key, value] of Object.entries(example)) form.elements[key].value = value;
   lastService = example.service;
