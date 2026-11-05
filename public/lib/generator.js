@@ -1,8 +1,9 @@
 import { juniperErrors, juniperPort, juniperScript } from './juniper.js';
+import { provisioningErrors, ciscoProvisioning } from './provisioning.js';
 
 export const SOLUTION = 'NNI3_CRM';
 export const SOLUTIONS = {
-  JUNIPER: { label: 'JUNIPER', vendor: 'Juniper', interface: 'et-0/0/', juniper: true, services: ['DATOS'] },
+  JUNIPER: { label: 'JUNIPER', vendor: 'Juniper', interface: 'et-0/0/', juniper: true },
   NNI3_CRM: { label: 'NNI3 CARMEN', interface: 'TenGigE0/2/1/2' },
   NNI2_MAP: { label: 'NNI2 MAPASINGUE', interface: 'TenGigabitEthernet1/1/1' },
   NNI_PORT: { label: 'NNI PORTOVIEJO', interface: 'GigabitEthernet0/0/0/4', routeLinkType: true },
@@ -77,7 +78,7 @@ export function parseInventory(text) {
   result.service = normalize(result.service).toUpperCase();
   const serviceRole = /^(DATOS|INTERNET)\s+(PPL|BCK)$/.exec(result.service);
   if (serviceRole) { result.service = serviceRole[1]; result.linkType = serviceRole[2]; }
-  result.routing = /bgp/i.test(result.routing) ? 'BGP' : /estatic/i.test(normalize(result.routing)) ? 'STATIC' : '';
+  result.routing = /bgp/i.test(result.routing) ? 'BGP' : /esta+tic/i.test(normalize(result.routing)) ? 'STATIC' : '';
   if (!result.wanPe || !result.wanCpe) result.warnings.push('No se identificaron las cuatro filas WAN. Completa las direcciones manualmente.');
   if (!/^[1-9]\d{0,8}Kbps$/i.test(clean(result.bandwidth))) result.warnings.push('El ancho de banda está incompleto; indica la política QoS (ej. 20480Kbps).');
   if (result.service === 'INTERNET') result.vrf = 'internet-pccs-ncb';
@@ -108,6 +109,7 @@ export function validate(input) {
   if (!['UNIQUE', 'PPL', 'BCK'].includes(input.linkType)) errors.linkType = 'Selecciona el tipo de enlace.';
   if (!['OPTICAL', 'ELECTRICAL'].includes(input.medium)) errors.medium = 'Selecciona óptico o eléctrico.';
   if (!Object.hasOwn(SOLUTIONS, input.solution ?? '')) errors.solution = 'Selecciona una solución disponible.';
+  Object.assign(errors, provisioningErrors(input));
   if (juniper) Object.assign(errors, juniperErrors(input));
   if (clean(input.engineeringUrl)) {
     try {
@@ -151,7 +153,13 @@ function carmenRouting(c) {
     const preference = d.linkType === 'BCK' ? 100 : 200;
     script.push(`prefix-set ${prefixSet}`, `  ${publicNets.join(',\n  ')}`, 'end-set', '!', `route-policy ${policy}`, `  if (destination in ${prefixSet}) then`, `    set community ${c.communities ?? '(19114:20, 19114:21, 19114:504)'}`, `    set local-preference ${preference}`, `    set weight ${preference}`, '  endif', 'end-policy', '!');
   }
-  if (bgp) script.push('router bgp 19114', ` vrf ${vrf}`, `  neighbor ${d.wanCpe}`, `   remote-as ${d.asn}`, `   description ${c.neighborDescription ?? baseName}`, '   address-family ipv4 unicast', `    maximum-prefix ${internet ? '100 75 warning-only' : '500 75'}`, `    route-policy ${internet ? policy : 'default_policy_pass_all'} in`, `    route-policy ${internet ? 'RP_internet-pccs-ncb_IPV4_OUT' : 'default_policy_pass_all'} out`, '    as-override', ...(internet ? ['    remove-private-AS'] : []), '   !', '  !', ' !', '!');
+  const createVrf = !internet && d.createVrf === 'YES';
+  if (bgp || createVrf) {
+    script.push('router bgp 19114', ` vrf ${vrf}`);
+    if (createVrf) script.push(`  rd 19114:${Number(d.rd)}`, '  address-family ipv4 unicast', '   redistribute connected', '   redistribute static', '  !');
+    if (bgp) script.push(`  neighbor ${d.wanCpe}`, `   remote-as ${d.asn}`, `   description ${c.neighborDescription ?? baseName}`, '   address-family ipv4 unicast', `    maximum-prefix ${internet ? '100 75 warning-only' : '500 75'}`, `    route-policy ${internet ? policy : 'default_policy_pass_all'} in`, `    route-policy ${internet ? 'RP_internet-pccs-ncb_IPV4_OUT' : 'default_policy_pass_all'} out`, '    as-override', ...(internet ? ['    remove-private-AS'] : []), '   !', '  !');
+    script.push(' !', '!');
+  }
   const checks = [
     ...(bgp ? [`sho run router bgp 19114 vrf ${vrf} neighbor ${d.wanCpe}`] : []),
     ...(bgp && internet ? [`sho run prefix-set ${prefixSet}`, `sho run route-policy ${policy}`] : []),
@@ -224,14 +232,16 @@ function mapasingueScript(c) {
       ' set community 19114:20 19114:21 19114:504', 'exit', '!',
     );
   }
-  if (bgp) script.push(
+  const createVrf = !internet && d.createVrf === 'YES';
+  if (bgp || createVrf) script.push(
     'router bgp 19114', ` address-family ipv4 vrf ${vrf}`,
-    `  neighbor ${d.wanCpe} remote-as ${d.asn}`, `  neighbor ${d.wanCpe} description ${baseName}`,
+    ...(createVrf ? [`  redistribute connected route-map ${connectedMap}`, '  redistribute static'] : []),
+    ...(bgp ? [`  neighbor ${d.wanCpe} remote-as ${d.asn}`, `  neighbor ${d.wanCpe} description ${baseName}`,
     `  neighbor ${d.wanCpe} activate`,
     ...(internet ? [`  neighbor ${d.wanCpe} remove-private-as`] : []),
     `  neighbor ${d.wanCpe} as-override`,
     ...(internet ? [`  neighbor ${d.wanCpe} route-map ${inputMap} in`, `  neighbor ${d.wanCpe} route-map RM_internet-pccs-ncb_IPV4_OUT out`] : []),
-    `  neighbor ${d.wanCpe} maximum-prefix ${internet ? 100 : 500}`, ' exit', 'exit', '!',
+    `  neighbor ${d.wanCpe} maximum-prefix ${internet ? 100 : 500}`] : []), ' exit', 'exit', '!',
   );
   const checks = [
     ...(!internet ? [`sho route-map ${connectedMap}`] : []),
@@ -273,7 +283,7 @@ export function generate(input) {
   const staticNets = [...new Set([...(internet ? (!bgp ? publicNets : []) : [d.loopback]), ...lanNets])];
   const bandwidth = d.bandwidth.replace(/kbps/i, 'Kbps');
   const title = juniper
-    ? `${d.iasi} ${d.client.toUpperCase()} ${d.branch.toUpperCase()} DAT${d.linkType === 'UNIQUE' ? '' : ` ${d.linkType}`}`
+    ? `${d.iasi} ${d.client.toUpperCase()} ${d.branch.toUpperCase()} ${internet ? 'INT' : 'DAT'}${d.linkType === 'UNIQUE' ? '' : ` ${d.linkType}`}`
     : `${d.iasi} ${d.client.toUpperCase()} ${d.branch.toUpperCase()}${d.linkType === 'UNIQUE' ? '' : ` ${d.linkType}`} ${d.service}`;
   const wanLabel = d.wanLabel || `${d.client.toUpperCase()} ${d.branch.toUpperCase()} ${d.service}`;
   const wanRows = [[d.wanNetwork, 'Red'], [d.wanPe, d.peName || 'PE'], [d.wanCpe, 'CLIENTE'], [d.wanBroadcast, 'Broadcast']].map(([ip, role]) => `${wanLabel.padEnd(45)} ${ip.padEnd(15)} ${role}`).join('\n');
@@ -290,9 +300,13 @@ export function generate(input) {
   ];
   const context = { d, internet, bgp, vrf, baseName, routeDescription, description, iface, bandwidth, staticNets, publicNets, p2p, vlan };
   const generated = juniper ? juniperScript(context) : pwhe ? pwheScript(context) : d.solution === 'NNI2_MAP' ? mapasingueScript(context) : carmenScript(context);
+  if (!juniper) generated.script.unshift(...ciscoProvisioning(context));
   const whitelist = internet ? ['', '////////// IPTCHL1CAR201 - IPTCHL1CCRM01 //////////', '', 'object-group network ipv4 SMTP-WHITELIST-NET', ...publicNets, 'sh comm cha dif', `commit comment ${baseName}`, 'end'] : [];
   const monitorFilter = d.solution === 'NNI2_MAP' ? d.loopback?.split('/')[0] : d.loopback;
-  const checks = juniper ? generated.checks : [
+  const checks = juniper ? [
+    ...generated.checks,
+    ...(internet ? ['', ...publicNets.map(net => `sh runn object-group network ipv4 SMTP-WHITELIST-NET | inc ${net.split('/')[0]}`)] : []),
+  ] : [
     `sho run interface ${iface}`, `sho int desc | in ${vlan}`, `sho run | in ${d.wanCpe}`,
     ...generated.checks, '',
     ...(!internet ? [`sho route vrf sigmars | in ${monitorFilter}`] : publicNets.map(net => `sho route vrf ${vrf} | in ${net}`)),

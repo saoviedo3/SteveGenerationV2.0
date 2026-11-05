@@ -22,6 +22,27 @@ export const juniperSample = {
   engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@C477_PICH_RED-UIO-PZ-M_SERV-D-BCK',
 };
 
+export const juniperInternetStatic = {
+  ...juniperSample, service: 'INTERNET', routing: 'STATIC', linkType: 'UNIQUE',
+  client: 'CENTRO CERAMICO CERMOSA', branch: 'CUE CC OFI MCE', iasi: '126123-1-1', linkId: 'SINID',
+  workOrder: 'CHG0448215', access: 'IPTJHL5HVRL01', port: '4', bandwidth: '51200Kbps',
+  vlan: '304', vrf: 'internet-pccs-ncb', asn: '', loopback: '', rd: '',
+  publicNetworks: '181.188.198.76/32', juniperRegion: 'CUENCA', mgmtTerm: '4',
+  wanNetwork: '10.115.6.120', wanPe: '10.115.6.121', wanCpe: '10.115.6.122', wanBroadcast: '10.115.6.123',
+  wanLabel: 'CENTRO CERAMICO CERMOSA CUE CC OFICINA MCE INTERNET',
+  engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@D286_AZUA_RED-CUE_SERVINT',
+};
+
+export const juniperInternetBgp = {
+  ...juniperSample, service: 'INTERNET', routing: 'BGP', linkId: 'SINID',
+  access: 'IPTJHL4CAR202', port: '18', bandwidth: '153600Kbps', vlan: '204',
+  vrf: 'internet-pccs-ncb', loopback: '', rd: '', publicNetworks: '181.188.210.71/32',
+  juniperRegion: 'QUITO', mgmtTerm: '4',
+  wanNetwork: '10.112.48.176', wanPe: '10.112.48.177', wanCpe: '10.112.48.178', wanBroadcast: '10.112.48.179',
+  wanLabel: 'CORNEJOTEX UIO PLANTA ZAMBIZA INT BCK',
+  engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@C477_PICH_RED-UIO-PZ-M_SERV-INT-BCK',
+};
+
 export const juniperInventory = `CORNEJOTEX CIA. LTDA.
 -----------------------------
 SERVICIO:

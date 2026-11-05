@@ -1,15 +1,16 @@
 # Steve Generation
 
-Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco · NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO, PWHE CARRETAS y PWHE CALDERON**, y **Juniper DATOS**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiquetas, script y validaciones.
+Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco · NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO, PWHE CARRETAS y PWHE CALDERON**, y **Juniper DATOS e INTERNET**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiquetas, script y validaciones.
 
-La rama **`codex/juniper-datos`** incorpora **Juniper DATOS estático y BGP** para pruebas locales. Esta actualización todavía no se despliega en Cloudflare Pages; la publicación se hará después de revisarla. El CI de esta rama solo ejecuta comprobaciones.
+La rama **`codex/juniper-datos`** incorpora **Juniper DATOS e INTERNET, estático y BGP**, y opciones comunes para crear VRF y velocidad en Cisco. Esta actualización todavía no se despliega en Cloudflare Pages; la publicación se hará después de revisarla. El CI de esta rama solo ejecuta comprobaciones.
 
 Sitio de producción: **https://steve-generation.pages.dev/**. El primer acceso se realiza como **root**, con la contraseña elegida en el secreto `PAGES_INITIAL_ADMIN_PASSWORD` del entorno. Desde Administración puedes crear las demás cuentas. Los usuarios y el historial de producción se guardan en D1 y son independientes de la base local.
 
 ## Funciones
 
 - DATOS BGP, DATOS estático, INTERNET BGP e INTERNET estático en NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO, PWHE CARRETAS y PWHE CALDERON: veinte plantillas.
-- Juniper DATOS estático y BGP: dos plantillas con puerto `et-0/0/`, creación opcional de VRF y velocidad, y término BGP editable.
+- Juniper DATOS e INTERNET, estático y BGP: cuatro plantillas con puerto `et-0/0/`, creación opcional de recursos y términos BGP editables. INTERNET BGP permite elegir Quito o Cuenca.
+- Creación opcional de VRF en DATOS y velocidad en ambos servicios para las seis soluciones. Ambas opciones están en No por defecto.
 - Enlace único, principal (PPL) y respaldo (BCK); medio óptico o eléctrico.
 - Importación `.txt` por archivo, arrastre o texto pegado. UTF-8 y Windows-1252; máximo 256 KB. El archivo original se procesa en el navegador y no se sube al servidor.
 - Validación de VLAN, ASN, IPv4, redes CIDR y las cuatro direcciones de una WAN `/30`.
@@ -18,7 +19,7 @@ Sitio de producción: **https://steve-generation.pages.dev/**. El primer acceso 
 - Enlace opcional a la ingeniería, debajo del título del TXT. Se admite HTTP/HTTPS y se conserva el enlace completo con sus parámetros.
 - Historial privado: los últimos **100 documentos por usuario**. Descargar guarda el documento; copiar no lo guarda. Se pueden consultar, descargar y eliminar documentos.
 
-Juniper INTERNET, scripts ZTE y soluciones GPON y NNI2 CARMEN **todavía no están implementados**. La etiqueta ZTE es un recurso de texto, no una configuración de ese fabricante. La aplicación no se conecta a equipos ni ejecuta comandos.
+Scripts ZTE y soluciones GPON y NNI2 CARMEN **todavía no están implementados**. La etiqueta ZTE es un recurso de texto, no una configuración de ese fabricante. La aplicación no se conecta a equipos ni ejecuta comandos.
 
 ## Desarrollo local
 
@@ -202,11 +203,21 @@ npm run db:migrate
 npm run dev
 ```
 
-Entra con tu cuenta **local** existente, elige **Juniper · DATOS** y pulsa **Cargar ejemplo**. La cuenta local es independiente de la cuenta del sitio público. Si todavía no tienes una cuenta local, créala con `npm run admin:create -- --local --username root`. Las migraciones conservan los usuarios e historiales existentes.
+Entra con tu cuenta **local** existente, elige **Juniper**, el servicio y el enrutamiento, y pulsa **Cargar ejemplo**. Juniper carga el caso de ejemplo correspondiente a esa selección. La cuenta local es independiente de la cuenta del sitio público. Si todavía no tienes una cuenta local, créala con `npm run admin:create -- --local --username root`. Las migraciones conservan los usuarios e historiales existentes.
+
+## Creación de VRF y velocidad en Cisco
+
+Las opciones **Crear la VRF** y **Crear la velocidad** están en **No** por defecto. Crear VRF se ofrece solo en DATOS; INTERNET conserva la VRF compartida `internet-pccs-ncb`. Crear velocidad se ofrece en ambos servicios, con enrutamiento estático o BGP, incluidas CARRETAS y CALDERON.
+
+Al crear VRF se pide la parte numérica del RD, con ASN `19114` fijo. MAPASINGUE utiliza IOS XE: `ip vrf`, export map `RM-monitor`, route-target export/import del RD y route-target import `19114:200002`. CARMEN, PORTOVIEJO y ambos PWHE utilizan IOS XR: `vrf`, address-family ipv4 unicast, route-targets y export route-policy `RM-monitor`. Las políticas compartidas RM-monitor deben existir en el equipo.
+
+La definición de VRF y la política QoS aparecen antes de las interfaces. También se genera la redistribución de connected y static en el BGP del proveedor cuando se crea la VRF, incluido un enlace estático. En XE, connected usa `RM_<vrf>_connected`, que referencia la subinterfaz. En XR se agrega el RD bajo BGP. Un enlace BGP añade su vecino al mismo bloque. PWHE mantiene un solo bloque común de enrutamiento para sus dos PE.
+
+Crear velocidad genera `policy-map <Kbps>` y `class class-default`. XE utiliza `police cir ... bc ... be ...`; XR, `police rate ... bps burst ... bytes peak-burst ... bytes`, con conform-action transmit y exceed-action drop. La tasa es Kbps × 1000 y el burst es esa tasa dividida entre 32, redondeada hacia arriba si es fraccionaria. `1024Kbps` genera `1024000` y `32000` en ambos sistemas. Las service-policy input/output se aplican aunque no se cree la velocidad.
 
 ## Reglas de Juniper DATOS
 
-Se incorporan únicamente DATOS estático y BGP. INTERNET queda pendiente de sus plantillas. El archivo original con rol **FUSION** se importa conservando su WAN, la loopback y el ancho de banda; el ejemplo de resultado utiliza `40960Kbps`, pero importar el archivo de origen conserva `194560Kbps` hasta que lo cambies.
+El archivo original con rol **FUSION** se importa conservando su WAN, la loopback y el ancho de banda; el ejemplo de resultado utiliza `40960Kbps`, pero importar el archivo de origen conserva `194560Kbps` hasta que lo cambies.
 
 | Recurso | Regla |
 | --- | --- |
@@ -222,13 +233,32 @@ Se incorporan únicamente DATOS estático y BGP. INTERNET queda pendiente de sus
 | Puerto físico | Siempre se generan `delete ... unit 0`, `delete ... disable`, `mtu 2000`, flexible-vlan-tagging y hierarchical-scheduler, como en el ejemplo. Revisa su uso en un puerto que ya tenga servicios. |
 | Enrutamiento | Loopback `/32` y redes LAN opcionales como rutas estáticas hacia el CPE, también con BGP. |
 | BGP | Grupo con el nombre completo de la etiqueta, descripción de cliente/sucursal, dirección local del PE, vecino CPE, ASN remoto, as-override y remove-private. |
-| Término BGP | `3` por defecto, editable desde `3` para usar el siguiente término disponible de la política. Los términos 1 y 2 se reservan para direct/static. |
+| term export bgp | `3` por defecto, editable desde `3` para usar el siguiente término disponible de la política. Los términos 1 y 2 se reservan para direct/static. |
 
 Las condiciones `from protocol bgp` y `from neighbor` se generan en comandos separados de Junos. El nuevo término se coloca explícitamente antes de `term reject` con `insert`, incluso al ampliar una política existente, para que el rechazo final no lo deje sin efecto. Al crear la VRF, las políticas import/export conservan un rechazo final.
 
 Las validaciones usan el puerto, la velocidad y la loopback actuales; no reutilizan los valores distintos del ejemplo. La validación de `sigmars` se conserva como comando separado para el equipo Cisco de monitoreo. El documento identifica correctamente el servicio como DATOS. No se requiere una migración nueva: la solución se guarda en la columna de historial existente.
 
 Importar otro archivo reinicia las opciones de creación, el RD y el término BGP para evitar reutilizar esos datos de otro enlace. El nombre de VRF y los recursos del inventario se conservan según lo importado. Si eliges No crear la VRF o la velocidad, se presupone que sus recursos ya existen en el equipo; la aplicación no los consulta.
+
+## Reglas de Juniper INTERNET
+
+INTERNET utiliza siempre `internet-pccs-ncb`, tanto en el encabezado como en los comandos; se corrige el `internet-pcs-ncb` que aparece en uno de los ejemplos. No se ofrece crear la VRF ni se exige RD o loopback de monitoreo. Se mantiene el puerto `et-0/0/`, VLAN igual a unit/vlan-id, MTU, negociación, filtro input y perfil CoS de DATOS. La creación opcional de velocidad también está disponible.
+
+Las descripciones de interfaz y la etiqueta copiable conservan `CLIENTE_SUCURSAL_INT[_PPL/BCK]_ID`, incluido `SINID` cuando se ingresa así. Los nombres de prefix-list, política de entrada y grupo BGP utilizan `cliente_sucursal_int[_ppl/bck]` sin ID, siguiendo el ejemplo de INTERNET. El grupo BGP de DATOS conserva su nombre completo anterior.
+
+INTERNET estático crea una ruta por red pública hacia el CPE. INTERNET BGP añade `encapsulation flexible-ethernet-services`, prefix-list de las redes públicas, política de entrada y grupo external con dirección del PE, vecino CPE, ASN remoto, límite de 100 prefijos, as-override, remove-private y política de salida `RP_internet-pccs-ncb_IPV4_OUT`. Las LAN opcionales se agregan como rutas estáticas en ambas variantes.
+
+| Ubicación del equipo, obligatoria en BGP | Comunidades de entrada | Política de gestión |
+| --- | --- | --- |
+| Quito | `19114:10`, `19114:11`, `19114:504` | `RP_CPE-MGMT-INTERNET-PCCS-NCB` |
+| Cuenca | `19114:20`, `19114:21`, `19114:504` | `RP_CPE-MGMT-INTERNET-PCCS-NCB_IPV4` |
+
+Por confirmación del usuario, **local-preference y metric** son **200 para único/PPL** y **100 para BCK**. El campo **term gestión bgp** permite seleccionar el siguiente término disponible de la política de gestión; comienza en **4**. Se añade el vecino en ese término y se coloca antes del rechazo final mediante `insert`, con la misma lógica que `term export bgp` de DATOS.
+
+En ambas variantes se incluyen configuración y validación SMTP en el bloque separado de `IPTCHL1CAR201 - IPTCHL1CCRM01`. El comentario se deriva del cliente y sucursal actuales. Las validaciones del PE usan comandos Junos y las redes, el puerto y el CPE actuales; las de SMTP conservan los comandos Cisco del bloque externo. No se reutiliza el CPE de un ejemplo diferente.
+
+Importar otro TXT reinicia también la ciudad y `term gestión bgp` (4), para que se elija la ubicación del enlace nuevo antes de generar BGP. Las cuentas e historiales existentes se conservan sin migraciones adicionales.
 
 ## Pruebas
 
@@ -239,12 +269,12 @@ npm run test:integration
 CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
 ```
 
-- `test`: parser, las 60 combinaciones Cisco y las seis Juniper DATOS, redes, entradas inválidas, opciones Juniper y contraseñas.
+- `test`: parser, las 60 combinaciones Cisco y las doce Juniper, Quito/Cuenca, creación de VRF/QoS XE/XR, redes, entradas inválidas y contraseñas.
 - `check`: sintaxis y compilación del módulo avanzado de Pages en `dist/_worker.js`; no publica.
-- `test:integration`: base temporal, migraciones, creación de administrador y Pages local con su módulo compilado. Comprueba también la inicialización segura del primer root, autenticación, permisos, las veinte variantes Cisco y las dos Juniper, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
+- `test:integration`: base temporal, migraciones, creación de administrador y Pages local con su módulo compilado. Comprueba también la inicialización segura del primer root, autenticación, permisos, las veinte variantes Cisco y las cuatro Juniper, creación de recursos, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
 - `test:browser`: flujo real en Chromium de escritorio/móvil, importación, variantes, descarga, historial, copia individual de etiquetas PWHE, administración y errores JavaScript/CSP. Requiere Chromium instalado o `CHROMIUM_PATH`. Usa una base temporal. Capturas en `test-results/`, ignoradas por Git.
 
-No requieren credenciales de Cloudflare. Estas pruebas no validan comandos contra un Cisco real.
+No requieren credenciales de Cloudflare. Estas pruebas no validan comandos contra equipos Cisco o Juniper reales.
 
 ## Publicar en Cloudflare Pages + D1
 

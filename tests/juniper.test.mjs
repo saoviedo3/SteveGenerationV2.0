@@ -90,8 +90,9 @@ test('campos de Juniper impiden inyección y sobrescritura de términos de polí
   for (const bgpTerm of ['', '0', '1', '2', '3.5', '3;commit', 3]) assert.ok(generate({ ...juniperSample, routing: 'BGP', bgpTerm }).errors.bgpTerm);
   assert.ok(generate({ ...juniperSample, createVrf: true }).errors.createVrf);
   assert.ok(generate({ ...juniperSample, createSpeed: 'yes\ncommit' }).errors.createSpeed);
-  assert.ok(generate({ ...juniperSample, service: 'INTERNET' }).errors.service);
-  assert.deepEqual(generate({ ...sample, createVrf: 'YES', createSpeed: 'YES', rd: '', bgpTerm: '1' }).errors, {});
+  assert.ok(generate({ ...juniperSample, service: 'INTERNET' }).errors.publicNetworks);
+  assert.ok(generate({ ...sample, createVrf: 'YES', rd: '' }).errors.rd);
+  assert.deepEqual(generate({ ...sample, createVrf: 'YES', createSpeed: 'YES', rd: '103211', bgpTerm: '1' }).errors, {});
 });
 
 test('importa la WAN con FUSION y conserva valores del inventario sin sustituirlos por el ejemplo', () => {

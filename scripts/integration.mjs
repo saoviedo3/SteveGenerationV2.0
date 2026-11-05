@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { sample, mapSample, mapInternetSample, portSample, pwheSample, calderonSample, juniperSample } from '../tests/fixtures.mjs';
+import { sample, mapSample, mapInternetSample, portSample, pwheSample, calderonSample, juniperSample, juniperInternetStatic, juniperInternetBgp } from '../tests/fixtures.mjs';
 import { wranglerArgs, stopProcess } from './wrangler.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'steve-integration-'));
@@ -168,6 +168,35 @@ try {
       const stored = (await request(`/history/${result.data.id}`, { cookie: firstCookie })).data.item;
       assert.equal(stored.solution, 'JUNIPER');
       assert.equal(stored.document, result.data.document);
+      assert.equal((await request(`/history/${result.data.id}`, { method: 'DELETE', cookie: firstCookie })).status, 200);
+    }
+  });
+  await check('INTERNET Juniper genera estático y BGP por ciudad con QoS opcional y guarda el historial', async () => {
+    assert.equal((await request('/history', { method: 'POST', cookie: firstCookie, data: { ...juniperInternetBgp, juniperRegion: '' } })).status, 422);
+    assert.equal((await request('/history', { method: 'POST', cookie: firstCookie, data: { ...juniperInternetStatic, createVrf: 'YES', rd: '103211' } })).status, 422);
+    for (const juniperRegion of ['QUITO', 'CUENCA']) for (const routing of ['STATIC', 'BGP']) {
+      const data = { ...(routing === 'BGP' ? juniperInternetBgp : juniperInternetStatic), juniperRegion, createSpeed: 'YES', mgmtTerm: '7' };
+      const result = await request('/history', { method: 'POST', cookie: firstCookie, data });
+      assert.equal(result.status, 201);
+      assert.ok(result.data.document.includes('SMTP-WHITELIST-NET'));
+      assert.ok(result.data.document.includes('$CREACION DE POLICER, FILTRO Y COS'));
+      assert.ok(!result.data.document.includes('route-distinguisher'));
+      if (routing === 'BGP') assert.ok(result.data.document.includes(`RP_CPE-MGMT-INTERNET-PCCS-NCB${juniperRegion === 'CUENCA' ? '_IPV4' : ''} term 7 from neighbor 10.112.48.178`));
+      const stored = (await request(`/history/${result.data.id}`, { cookie: firstCookie })).data.item;
+      assert.equal(stored.solution, 'JUNIPER');
+      assert.equal(stored.document, result.data.document);
+      assert.equal((await request(`/history/${result.data.id}`, { method: 'DELETE', cookie: firstCookie })).status, 200);
+    }
+  });
+  await check('Cisco XE/XR y PWHE crean VRF y redistribución con enrutamiento estático o BGP', async () => {
+    assert.equal((await request('/history', { method: 'POST', cookie: firstCookie, data: { ...sample, createVrf: 'YES', rd: '' } })).status, 422);
+    for (const [fixture, routing] of [[mapSample, 'STATIC'], [sample, 'BGP'], [calderonSample, 'STATIC']]) {
+      const data = { ...fixture, service: 'DATOS', routing, vrf: 'new_vrf', createVrf: 'YES', createSpeed: 'YES', rd: '102742', loopback: '192.0.2.1/32', asn: '64705', bandwidth: '1024Kbps' };
+      const result = await request('/history', { method: 'POST', cookie: firstCookie, data });
+      assert.equal(result.status, 201);
+      assert.ok(result.data.document.includes('19114:102742'));
+      assert.ok(result.data.document.includes('redistribute static'));
+      assert.ok(result.data.document.includes('policy-map 1024Kbps'));
       assert.equal((await request(`/history/${result.data.id}`, { method: 'DELETE', cookie: firstCookie })).status, 200);
     }
   });

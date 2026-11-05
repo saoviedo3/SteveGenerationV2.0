@@ -146,8 +146,6 @@ function values() { return Object.fromEntries(new FormData(form)); }
 function syncFields() {
   const solution = SOLUTIONS[form.elements.solution.value];
   const juniper = Boolean(solution.juniper);
-  form.elements.service.querySelector('[value=INTERNET]').disabled = juniper;
-  if (juniper && form.elements.service.value === 'INTERNET') form.elements.service.value = 'DATOS';
   const internet = form.elements.service.value === 'INTERNET';
   const bgp = form.elements.routing.value === 'BGP';
   const pwhe = Boolean(SOLUTIONS[form.elements.solution.value].pwhe);
@@ -161,11 +159,20 @@ function syncFields() {
   $('#public-field').hidden = !internet;
   $('#infinera-field').hidden = !pwhe;
   form.elements.infineraIp.required = pwhe;
-  $('#juniper-settings').hidden = !juniper;
-  for (const key of ['createVrf', 'createSpeed', 'rd', 'bgpTerm']) form.elements[key].disabled = !juniper;
-  $('#rd-field').hidden = !juniper || !(bgp || form.elements.createVrf.value === 'YES');
+  $('#create-vrf-field').hidden = internet;
+  if (internet) form.elements.createVrf.value = 'NO';
+  form.elements.createVrf.disabled = internet;
+  $('#create-speed-option').textContent = juniper ? 'Sí, crear policer, filtro y CoS' : 'Sí, crear la política QoS';
+  $('#rd-field').hidden = internet || !(form.elements.createVrf.value === 'YES' || (juniper && bgp));
   form.elements.rd.required = !$('#rd-field').hidden;
-  $('#bgp-term-field').hidden = !juniper || !bgp;
+  form.elements.rd.disabled = $('#rd-field').hidden;
+  $('#bgp-term-field').hidden = !juniper || !bgp || internet;
+  form.elements.bgpTerm.disabled = $('#bgp-term-field').hidden;
+  $('#juniper-region-field').hidden = !juniper || !bgp || !internet;
+  form.elements.juniperRegion.disabled = $('#juniper-region-field').hidden;
+  form.elements.juniperRegion.required = !$('#juniper-region-field').hidden;
+  $('#mgmt-term-field').hidden = !juniper || !bgp || !internet;
+  form.elements.mgmtTerm.disabled = $('#mgmt-term-field').hidden;
   $('#port-prefix').hidden = !juniper;
   $('#port-label').textContent = juniper ? 'Puerto' : 'Tarjeta y puerto';
   form.elements.port.placeholder = juniper ? '19' : 'OIGE8[0-1-7] GE: 8';
@@ -179,7 +186,7 @@ function syncFields() {
     : pwhe
     ? `Revisa los dos bloques PWHE y el bloque de enrutamiento común.${internet ? ' El bloque SMTP se aplica por separado en los equipos indicados.' : ''}`
     : 'Revisa el documento antes de aplicarlo. El bloque SMTP se ejecuta por separado en los equipos indicados.';
-  $('.workflow-label').textContent = juniper ? 'JUNIPER / DATOS' : `CISCO / ${solution.label}`;
+  $('.workflow-label').textContent = juniper ? `JUNIPER / ${form.elements.service.value}` : `CISCO / ${solution.label}`;
 }
 function renderErrors(errors) {
   $$('.field-error').forEach(node => node.remove());
@@ -272,6 +279,8 @@ function importText(text, filename = 'Texto importado') {
   form.elements.createVrf.value = 'NO';
   form.elements.createSpeed.value = 'NO';
   form.elements.bgpTerm.value = '3';
+  form.elements.mgmtTerm.value = '4';
+  form.elements.juniperRegion.value = '';
   for (const key of ['access', 'port', 'bandwidth', 'vlan', 'vrf', 'asn', 'loopback', 'publicNetworks', 'lanNetworks', 'responsible', 'wanNetwork', 'wanPe', 'wanCpe', 'wanBroadcast', 'wanLabel', 'peName', 'lastMile']) form.elements[key].value = parsed[key] ?? '';
   if (['DATOS', 'INTERNET'].includes(parsed.service)) form.elements.service.value = parsed.service;
   if (parsed.routing) form.elements.routing.value = parsed.routing;
@@ -309,6 +318,8 @@ $('#dropzone').addEventListener('drop', event => importFile(event.dataTransfer.f
 
 $('#load-example').addEventListener('click', () => {
   const solution = form.elements.solution.value;
+  const selectedService = form.elements.service.value;
+  const selectedRouting = form.elements.routing.value;
   const example = { solution, service: 'DATOS', routing: 'BGP', linkType: 'UNIQUE', medium: 'OPTICAL', client: 'FARCOMED', branch: 'SS MALDONADO', iasi: '124906-36-1', linkId: '10066459', workOrder: 'CRQ000000190789', access: 'PRADERA_GUASMO_6150', port: 'OIGE8[0-1-7] GE: 8', bandwidth: '10240Kbps', vlan: '3230', vrf: 'econofarm_datos', asn: '64877', loopback: '10.116.101.128/32', publicNetworks: '10.115.3.200/29', lanNetworks: '', responsible: 'Steven Alejandro Oviedo Buitron', wanNetwork: '10.115.3.204', wanPe: '10.115.3.205', wanCpe: '10.115.3.206', wanBroadcast: '10.115.3.207', wanLabel: 'FARCOMED SANA SANA MALDONADO DATOS', peName: 'IPTCHL3CCRM03', lastMile: 'UM TIGO', engineeringUrl: '', infineraIp: '' };
   if (solution === 'NNI2_MAP') Object.assign(example, {
     client: 'BCO PACIFICO', branch: 'GYE PLAZA GUAYARTE', iasi: '130763-4-1', linkId: '10072843',
@@ -345,15 +356,33 @@ $('#load-example').addEventListener('click', () => {
     lastMile: 'UM TELEFONICA',
     engineeringUrl: 'https://telefonica.dokuvizsoftware02.com/direct/openpage.html?page=PRO@A525_MATRIZ_RED-ALLIC_UM-TELE',
   });
-  Object.assign(example, { createVrf: 'NO', createSpeed: 'NO', rd: '', bgpTerm: '3' });
+  Object.assign(example, { createVrf: 'NO', createSpeed: 'NO', rd: '', bgpTerm: '3', mgmtTerm: '4', juniperRegion: '' });
   if (solution === 'JUNIPER') Object.assign(example, {
-    routing: 'STATIC', client: 'CORNEJOTEX', branch: 'UIO PLANTA ZAMBIZA', linkType: 'BCK',
+    routing: selectedRouting, client: 'CORNEJOTEX', branch: 'UIO PLANTA ZAMBIZA', linkType: 'BCK',
     iasi: '128627-4-1', linkId: '10073947', workOrder: 'CHG0459888', access: 'MIRAFLORES',
     port: '19', bandwidth: '40960Kbps', vlan: '1204', vrf: 'cornejotex', asn: '65509',
     loopback: '10.116.103.202/32', publicNetworks: '', rd: '103211',
     wanNetwork: '10.112.48.180', wanPe: '10.112.48.181', wanCpe: '10.112.48.182', wanBroadcast: '10.112.48.183',
     wanLabel: 'CORNEJOTEX UIO PLANTA ZAMBIZA DAT BCK', peName: 'FUSION',
     engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@C477_PICH_RED-UIO-PZ-M_SERV-D-BCK',
+  });
+  if (solution === 'JUNIPER' && selectedService === 'INTERNET') Object.assign(example, {
+    service: 'INTERNET', routing: selectedRouting, linkId: 'SINID', rd: '', loopback: '',
+    ...(selectedRouting === 'BGP' ? {
+      access: 'IPTJHL4CAR202', port: '18', bandwidth: '153600Kbps', vlan: '204',
+      vrf: 'internet-pccs-ncb', publicNetworks: '181.188.210.71/32', juniperRegion: 'QUITO',
+      wanNetwork: '10.112.48.176', wanPe: '10.112.48.177', wanCpe: '10.112.48.178', wanBroadcast: '10.112.48.179',
+      wanLabel: 'CORNEJOTEX UIO PLANTA ZAMBIZA INT BCK',
+      engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@C477_PICH_RED-UIO-PZ-M_SERV-INT-BCK',
+    } : {
+      client: 'CENTRO CERAMICO CERMOSA', branch: 'CUE CC OFI MCE', linkType: 'UNIQUE',
+      iasi: '126123-1-1', workOrder: 'CHG0448215', access: 'IPTJHL5HVRL01', port: '4',
+      bandwidth: '51200Kbps', vlan: '304', vrf: 'internet-pccs-ncb', asn: '',
+      publicNetworks: '181.188.198.76/32', juniperRegion: 'CUENCA',
+      wanNetwork: '10.115.6.120', wanPe: '10.115.6.121', wanCpe: '10.115.6.122', wanBroadcast: '10.115.6.123',
+      wanLabel: 'CENTRO CERAMICO CERMOSA CUE CC OFICINA MCE INTERNET',
+      engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@D286_AZUA_RED-CUE_SERVINT',
+    }),
   });
   for (const [key, value] of Object.entries(example)) form.elements[key].value = value;
   lastService = example.service;
@@ -363,7 +392,7 @@ $('#load-example').addEventListener('click', () => {
   $('#import-message').className = 'import-message';
   $('#import-status').textContent = 'EJEMPLO';
   update();
-  toast(`Ejemplo de ${SOLUTIONS[solution].label} cargado. Puedes explorar sus ${solution === 'JUNIPER' ? 'dos' : 'cuatro'} variantes.`);
+  toast(`Ejemplo de ${SOLUTIONS[solution].label} cargado. Puedes explorar sus cuatro variantes.`);
 });
 
 function requireValid() {
