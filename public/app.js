@@ -144,6 +144,10 @@ $$('[data-view]').forEach(button => button.addEventListener('click', () => navig
 
 function values() { return Object.fromEntries(new FormData(form)); }
 function syncFields() {
+  const solution = SOLUTIONS[form.elements.solution.value];
+  const juniper = Boolean(solution.juniper);
+  form.elements.service.querySelector('[value=INTERNET]').disabled = juniper;
+  if (juniper && form.elements.service.value === 'INTERNET') form.elements.service.value = 'DATOS';
   const internet = form.elements.service.value === 'INTERNET';
   const bgp = form.elements.routing.value === 'BGP';
   const pwhe = Boolean(SOLUTIONS[form.elements.solution.value].pwhe);
@@ -157,10 +161,25 @@ function syncFields() {
   $('#public-field').hidden = !internet;
   $('#infinera-field').hidden = !pwhe;
   form.elements.infineraIp.required = pwhe;
-  $('.review-note').textContent = pwhe
+  $('#juniper-settings').hidden = !juniper;
+  for (const key of ['createVrf', 'createSpeed', 'rd', 'bgpTerm']) form.elements[key].disabled = !juniper;
+  $('#rd-field').hidden = !juniper || !(bgp || form.elements.createVrf.value === 'YES');
+  form.elements.rd.required = !$('#rd-field').hidden;
+  $('#bgp-term-field').hidden = !juniper || !bgp;
+  $('#port-prefix').hidden = !juniper;
+  $('#port-label').textContent = juniper ? 'Puerto' : 'Tarjeta y puerto';
+  form.elements.port.placeholder = juniper ? '19' : 'OIGE8[0-1-7] GE: 8';
+  form.elements.port.inputMode = juniper ? 'numeric' : 'text';
+  form.elements.port.maxLength = juniper ? 3 : 100;
+  if (juniper) form.elements.port.value = form.elements.port.value.replace(/^et-0\/0\//, '');
+  form.elements.medium.parentElement.hidden = juniper;
+  $('#tag-box > label').textContent = juniper ? 'ETIQUETA DE INTERFAZ' : 'ETIQUETA PARA ZTE';
+  $('.review-note').textContent = juniper
+    ? 'Revisa el puerto físico y el término disponible en la política de exportación. Los comandos delete afectan la unidad 0 y el estado del puerto.'
+    : pwhe
     ? `Revisa los dos bloques PWHE y el bloque de enrutamiento común.${internet ? ' El bloque SMTP se aplica por separado en los equipos indicados.' : ''}`
     : 'Revisa el documento antes de aplicarlo. El bloque SMTP se ejecuta por separado en los equipos indicados.';
-  $('.workflow-label').textContent = `CISCO / ${SOLUTIONS[form.elements.solution.value].label}`;
+  $('.workflow-label').textContent = juniper ? 'JUNIPER / DATOS' : `CISCO / ${solution.label}`;
 }
 function renderErrors(errors) {
   $$('.field-error').forEach(node => node.remove());
@@ -176,7 +195,7 @@ function renderErrors(errors) {
       field.setAttribute('aria-describedby', `error-${key}`);
       const hint = element('span', 'field-error', value);
       hint.id = `error-${key}`;
-      field.parentElement.append(hint);
+      field.closest('label').append(hint);
     }
     const li = element('li');
     const link = element('button', '', value);
@@ -222,7 +241,8 @@ function update() {
     }
     renderedPwheTags = tagSignature;
   }
-  $('#interface-summary').textContent = valid ? current.interface : `${SOLUTIONS[form.elements.solution.value].label} · Cisco`;
+  const solution = SOLUTIONS[form.elements.solution.value];
+  $('#interface-summary').textContent = valid ? current.interface : `${solution.label} · ${solution.vendor ?? 'Cisco'}`;
 }
 form.addEventListener('input', update);
 form.addEventListener('change', update);
@@ -248,7 +268,10 @@ function importText(text, filename = 'Texto importado') {
   const parsed = parseInventory(text);
   if (!parsed.service && !parsed.bandwidth && !parsed.wanRows.length) throw new Error('No se reconocieron recursos de Network Inventory. Revisa el contenido del TXT.');
   // A new source must not inherit identifiers from a previous or demo link.
-  for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId', 'engineeringUrl', 'infineraIp']) form.elements[key].value = '';
+  for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId', 'engineeringUrl', 'infineraIp', 'rd']) form.elements[key].value = '';
+  form.elements.createVrf.value = 'NO';
+  form.elements.createSpeed.value = 'NO';
+  form.elements.bgpTerm.value = '3';
   for (const key of ['access', 'port', 'bandwidth', 'vlan', 'vrf', 'asn', 'loopback', 'publicNetworks', 'lanNetworks', 'responsible', 'wanNetwork', 'wanPe', 'wanCpe', 'wanBroadcast', 'wanLabel', 'peName', 'lastMile']) form.elements[key].value = parsed[key] ?? '';
   if (['DATOS', 'INTERNET'].includes(parsed.service)) form.elements.service.value = parsed.service;
   if (parsed.routing) form.elements.routing.value = parsed.routing;
@@ -322,6 +345,16 @@ $('#load-example').addEventListener('click', () => {
     lastMile: 'UM TELEFONICA',
     engineeringUrl: 'https://telefonica.dokuvizsoftware02.com/direct/openpage.html?page=PRO@A525_MATRIZ_RED-ALLIC_UM-TELE',
   });
+  Object.assign(example, { createVrf: 'NO', createSpeed: 'NO', rd: '', bgpTerm: '3' });
+  if (solution === 'JUNIPER') Object.assign(example, {
+    routing: 'STATIC', client: 'CORNEJOTEX', branch: 'UIO PLANTA ZAMBIZA', linkType: 'BCK',
+    iasi: '128627-4-1', linkId: '10073947', workOrder: 'CHG0459888', access: 'MIRAFLORES',
+    port: '19', bandwidth: '40960Kbps', vlan: '1204', vrf: 'cornejotex', asn: '65509',
+    loopback: '10.116.103.202/32', publicNetworks: '', rd: '103211',
+    wanNetwork: '10.112.48.180', wanPe: '10.112.48.181', wanCpe: '10.112.48.182', wanBroadcast: '10.112.48.183',
+    wanLabel: 'CORNEJOTEX UIO PLANTA ZAMBIZA DAT BCK', peName: 'FUSION',
+    engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@C477_PICH_RED-UIO-PZ-M_SERV-D-BCK',
+  });
   for (const [key, value] of Object.entries(example)) form.elements[key].value = value;
   lastService = example.service;
   datosVrf = example.service === 'DATOS' ? example.vrf : '';
@@ -330,7 +363,7 @@ $('#load-example').addEventListener('click', () => {
   $('#import-message').className = 'import-message';
   $('#import-status').textContent = 'EJEMPLO';
   update();
-  toast(`Ejemplo de ${SOLUTIONS[solution].label} cargado. Puedes explorar sus cuatro variantes.`);
+  toast(`Ejemplo de ${SOLUTIONS[solution].label} cargado. Puedes explorar sus ${solution === 'JUNIPER' ? 'dos' : 'cuatro'} variantes.`);
 });
 
 function requireValid() {
@@ -367,7 +400,7 @@ $('#download').addEventListener('click', () => {
   });
 });
 $('#copy-document').addEventListener('click', () => { if (requireValid()) copy(current.document, 'Documento copiado. No se guardó en el historial.'); });
-$('#copy-tag').addEventListener('click', () => { if (current?.tag) copy(current.tag, 'Etiqueta ZTE copiada.'); });
+$('#copy-tag').addEventListener('click', () => { if (current?.tag) copy(current.tag, 'Etiqueta copiada.'); });
 
 function emptyState(title, description, icon = '◷') {
   const box = element('div', 'empty-state');

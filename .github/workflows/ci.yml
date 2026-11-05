@@ -2,7 +2,7 @@ name: Check and deploy
 
 on:
   push:
-    branches: [main, codex/steve-generation-v1]
+    branches: [main, codex/steve-generation-v1, codex/juniper-datos]
   pull_request:
 
 permissions:

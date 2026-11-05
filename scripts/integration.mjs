@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { sample, mapSample, mapInternetSample, portSample, pwheSample, calderonSample } from '../tests/fixtures.mjs';
+import { sample, mapSample, mapInternetSample, portSample, pwheSample, calderonSample, juniperSample } from '../tests/fixtures.mjs';
 import { wranglerArgs, stopProcess } from './wrangler.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'steve-integration-'));
@@ -154,6 +154,22 @@ try {
     assert.equal(items.filter(item => item.solution === 'NNI2_MAP').length, 4);
     assert.equal(items.filter(item => item.solution === 'CARRETAS_PWHE3').length, 4);
     assert.equal(items.filter(item => item.solution === 'CALDERON_PWHE3').length, 4);
+  });
+  await check('Juniper DATOS valida RD y término, genera ambas variantes y conserva su solución en el historial', async () => {
+    assert.equal((await request('/history', { method: 'POST', cookie: firstCookie, data: { ...juniperSample, service: 'INTERNET' } })).status, 422);
+    assert.equal((await request('/history', { method: 'POST', cookie: firstCookie, data: { ...juniperSample, routing: 'BGP', rd: '' } })).status, 422);
+    assert.equal((await request('/history', { method: 'POST', cookie: firstCookie, data: { ...juniperSample, routing: 'BGP', bgpTerm: '2' } })).status, 422);
+    for (const routing of ['STATIC', 'BGP']) {
+      const result = await request('/history', { method: 'POST', cookie: firstCookie, data: { ...juniperSample, routing, createVrf: 'YES', createSpeed: 'YES', bgpTerm: '5' } });
+      assert.equal(result.status, 201);
+      assert.ok(result.data.document.includes('set interfaces et-0/0/19 unit 1204 vlan-id 1204'));
+      assert.ok(result.data.document.includes('burst-size-limit 1280000'));
+      assert.equal(result.data.document.includes('term 5 from protocol bgp'), routing === 'BGP');
+      const stored = (await request(`/history/${result.data.id}`, { cookie: firstCookie })).data.item;
+      assert.equal(stored.solution, 'JUNIPER');
+      assert.equal(stored.document, result.data.document);
+      assert.equal((await request(`/history/${result.data.id}`, { method: 'DELETE', cookie: firstCookie })).status, 200);
+    }
   });
   await check('aislamiento del historial, incluso frente al administrador', async () => {
     assert.equal((await request('/history', { cookie: secondCookie })).data.items.length, 0);

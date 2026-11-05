@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#122c38">
-  <meta name="description" content="Generador de configuraciones Cisco NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO, PWHE CARRETAS y PWHE CALDERON a partir de recursos de Network Inventory.">
+  <meta name="description" content="Generador de configuraciones Cisco y Juniper a partir de recursos de Network Inventory.">
   <title>Steve Generation · Configuración de red</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/styles.css">
@@ -40,7 +40,7 @@
         <button data-view="history" class="nav-item"><span class="nav-icon">◷</span>Mi historial</button>
         <button data-view="users" class="nav-item" id="users-nav" hidden><span class="nav-icon">♧</span>Usuarios</button>
       </nav>
-      <div class="sidebar-note"><span class="status-dot"></span><b>Cisco</b><p>NNI3 CARMEN · NNI2 MAPASINGUE<br>NNI PORTOVIEJO · PWHE CARRETAS<br>PWHE CALDERON<br>Datos e Internet · BGP / Estático</p><span class="small-tag">20 PLANTILLAS DISPONIBLES</span></div>
+      <div class="sidebar-note"><span class="status-dot"></span><b>Cisco · Juniper</b><p>NNI3 CARMEN · NNI2 MAPASINGUE<br>NNI PORTOVIEJO · PWHE CARRETAS<br>PWHE CALDERON · JUNIPER<br>BGP / Estático</p><span class="small-tag">22 PLANTILLAS DISPONIBLES</span></div>
       <div class="sidebar-bottom"><button data-view="account" class="profile"><span id="avatar" class="avatar">S</span><span><b id="profile-name"></b><small id="profile-role"></small></span><span class="profile-arrow">↗</span></button><button id="logout" class="logout">Cerrar sesión <span>↪</span></button></div>
     </aside>
     <div class="main-shell">
@@ -58,7 +58,7 @@
               </section>
               <section class="card"><div class="card-heading"><span class="section-number">02</span><div><h2>Detalles del enlace</h2><p>Completa los datos que identifican tu configuración.</p></div></div>
                 <div class="field-grid">
-                  <label class="span-2">Solución<select name="solution"><option value="NNI3_CRM">Cisco · NNI3 CARMEN</option><option value="NNI2_MAP">Cisco · NNI2 MAPASINGUE</option><option value="NNI_PORT">Cisco · NNI PORTOVIEJO</option><option value="CARRETAS_PWHE3">Cisco · PWHE CARRETAS</option><option value="CALDERON_PWHE3">Cisco · PWHE CALDERON</option></select></label>
+                  <label class="span-2">Solución<select name="solution"><option value="NNI3_CRM">Cisco · NNI3 CARMEN</option><option value="NNI2_MAP">Cisco · NNI2 MAPASINGUE</option><option value="NNI_PORT">Cisco · NNI PORTOVIEJO</option><option value="CARRETAS_PWHE3">Cisco · PWHE CARRETAS</option><option value="CALDERON_PWHE3">Cisco · PWHE CALDERON</option><option value="JUNIPER">Juniper · DATOS</option></select></label>
                   <label>Servicio<select name="service"><option value="DATOS">Datos</option><option value="INTERNET">Internet</option></select></label>
                   <label>Enrutamiento<select name="routing"><option value="BGP">BGP</option><option value="STATIC">Estático</option></select></label>
                   <div class="field-label span-2" role="group" aria-labelledby="link-type-label"><span id="link-type-label">Tipo de enlace</span><span class="segment-control"><label><input type="radio" name="linkType" value="UNIQUE" checked><span>Único</span></label><label><input type="radio" name="linkType" value="PPL"><span>Principal · PPL</span></label><label><input type="radio" name="linkType" value="BCK"><span>Respaldo · BCK</span></label></span></div>
@@ -69,7 +69,7 @@
                   <label class="span-2">Enlace a la ingeniería <span class="optional">Opcional</span><input name="engineeringUrl" type="url" maxlength="2048" placeholder="https://…"><small>Se incluye al inicio del TXT, debajo del título.</small></label>
                   <label class="span-2">Orden de trabajo · OT <span class="required">*</span><input name="workOrder" placeholder="CRQ000000190789" maxlength="80" required></label>
                   <label>Equipo de acceso <span class="required">*</span><input name="access" placeholder="PRADERA_GUASMO_6150" maxlength="100" required></label>
-                  <label>Tarjeta y puerto <span class="required">*</span><input name="port" placeholder="OIGE8[0-1-7] GE: 8" maxlength="100" required></label>
+                  <label><span><span id="port-label">Tarjeta y puerto</span> <span class="required">*</span></span><span class="prefixed-input"><span id="port-prefix" hidden>et-0/0/</span><input name="port" placeholder="OIGE8[0-1-7] GE: 8" maxlength="100" required></span></label>
                 </div>
               </section>
               <section class="card"><div class="card-heading"><span class="section-number">03</span><div><h2>Recursos de red</h2><p>Verifica los valores extraídos antes de generar.</p></div><span class="subtle-badge">IPv4</span></div>
@@ -78,6 +78,12 @@
                   <label>Ancho de banda <span class="required">*</span><input name="bandwidth" placeholder="10240Kbps" maxlength="20" required><small>Nombre de la política QoS en el PE.</small></label>
                   <label>VLAN <span class="required">*</span><input name="vlan" inputmode="numeric" placeholder="3230" maxlength="4" required></label>
                   <label>VRF <span class="required">*</span><input name="vrf" placeholder="econofarm_datos" maxlength="64" required></label>
+                  <div id="juniper-settings" class="field-grid span-2" hidden>
+                    <label>¿Crear la VRF?<select name="createVrf"><option value="NO">No, ya existe</option><option value="YES">Sí, crear VRF y políticas</option></select></label>
+                    <label>¿Crear la velocidad?<select name="createSpeed"><option value="NO">No, ya existe</option><option value="YES">Sí, crear policer, filtro y CoS</option></select></label>
+                    <label id="rd-field" hidden>RD <span class="required">*</span><span class="prefixed-input"><span>19114:</span><input name="rd" inputmode="numeric" placeholder="103211" maxlength="10"></span><small>Obligatorio al crear la VRF y en BGP para su comunidad de exportación.</small></label>
+                    <label id="bgp-term-field" hidden>Término de exportación BGP<input name="bgpTerm" type="number" min="3" max="2147483647" step="1" value="3"><small>Usa el siguiente término disponible: 3, 4, 5…</small></label>
+                  </div>
                   <label id="asn-field">ASN remoto <span class="required">*</span><input name="asn" inputmode="numeric" placeholder="64877" maxlength="10"></label>
                   <label class="span-2" id="loopback-field">Loopback de monitoreo <span class="required">*</span><input name="loopback" placeholder="10.116.101.128/32" maxlength="18"><small>La validación de monitoreo utiliza la VRF sigmars.</small></label>
                   <label class="span-2" id="public-field" hidden>Redes públicas <span class="required">*</span><textarea name="publicNetworks" rows="2" placeholder="10.115.3.200/29"></textarea><small>Una red por línea, en formato CIDR.</small></label>

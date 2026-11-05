@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { inventory, sample, mapSample, portSample, portInventory, pwheSample, pwheInventory } from '../tests/fixtures.mjs';
+import { inventory, sample, mapSample, portSample, portInventory, pwheSample, pwheInventory, juniperSample, juniperInventory } from '../tests/fixtures.mjs';
 import { wranglerArgs, stopProcess } from './wrangler.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'steve-browser-'));
@@ -56,7 +56,7 @@ try {
   await page.screenshot({ path: 'test-results/login-desktop.png', fullPage: true });
   await login(page, 'testroot');
   assert.ok(!(await page.locator('body').innerText()).includes('IOS XR'));
-  assert.equal(await page.locator('[name=solution] option').count(), 5);
+  assert.equal(await page.locator('[name=solution] option').count(), 6);
   await page.screenshot({ path: 'test-results/studio-empty.png', fullPage: true });
   console.log('✓ Inicio de sesión de administrador e interfaz inicial');
 
@@ -319,6 +319,73 @@ try {
   assert.ok((await page.locator('.history-item').textContent()).includes('PWHE CALDERON'));
   console.log('✓ Cuatro variantes Calderon, PE exclusivos, dampening, etiquetas CLD e historial');
 
+  await page.locator('.nav-item[data-view=generator]').click();
+  await page.locator('[name=solution]').selectOption('JUNIPER');
+  assert.equal(await page.locator('[name=service]').inputValue(), 'DATOS');
+  // isDisabled retargets to the enabled select when its option is inside a label.
+  assert.equal(await page.locator('[name=service] option[value=INTERNET]').evaluate(option => option.disabled), true);
+  await page.locator('#load-example').click();
+  assert.equal(await page.locator('[name=port]').inputValue(), '19');
+  assert.equal(await page.locator('#port-prefix').textContent(), 'et-0/0/');
+  assert.equal(await page.locator('#rd-field').isVisible(), false);
+  assert.equal(await page.locator('[name=createVrf]').inputValue(), 'NO');
+  assert.equal(await page.locator('[name=createSpeed]').inputValue(), 'NO');
+  assert.ok(!(await page.locator('#code-preview').textContent()).includes('$CREACION DE VRF'));
+  assert.ok((await page.locator('#code-preview').textContent()).includes('unit 1204 vlan-id 1204'));
+  assert.equal(await page.locator('#tag-text').textContent(), 'CORNEJOTEX_UIO_PLANTA_ZAMBIZA_DAT_BCK_10073947');
+  await page.locator('[name=createVrf]').selectOption('YES');
+  assert.equal(await page.locator('#rd-field').isVisible(), true);
+  await page.locator('[name=createSpeed]').selectOption('YES');
+  let juniperContent = await page.locator('#code-preview').textContent();
+  assert.ok(juniperContent.includes('route-distinguisher 19114:103211'));
+  assert.ok(juniperContent.includes('burst-size-limit 1280000'));
+  await page.locator('[name=bandwidth]').fill('1000000Kbps');
+  assert.ok((await page.locator('#code-preview').textContent()).includes('speed 1g'));
+  await page.locator('[name=bandwidth]').fill('1000001Kbps');
+  assert.ok((await page.locator('#code-preview').textContent()).includes('speed 10g'));
+  await page.locator('[name=bandwidth]').fill('40960Kbps');
+  await page.locator('[name=routing]').selectOption('BGP');
+  await page.locator('[name=createVrf]').selectOption('NO');
+  assert.equal(await page.locator('#rd-field').isVisible(), true);
+  assert.equal(await page.locator('[name=bgpTerm]').inputValue(), '3');
+  await page.locator('[name=bgpTerm]').fill('1');
+  await page.locator('#copy-document').click();
+  assert.equal(await page.locator('[name=bgpTerm]').getAttribute('aria-invalid'), 'true');
+  await page.locator('[name=bgpTerm]').fill('5');
+  juniperContent = await page.locator('#code-preview').textContent();
+  assert.ok(juniperContent.includes('insert policy-options policy-statement export_cornejotex term 5 before term reject'));
+  assert.ok(juniperContent.includes('peer-as 65509'));
+  await page.screenshot({ path: 'test-results/juniper-bgp-desktop.png', fullPage: true });
+  await page.locator('[name=routing]').selectOption('STATIC');
+  await page.locator('#inventory-file').setInputFiles({ name: 'juniper.txt', mimeType: 'text/plain', buffer: Buffer.from(juniperInventory) });
+  await page.waitForFunction(() => document.querySelector('#import-status').textContent.includes('IMPORTADO'));
+  assert.equal(await page.locator('[name=bandwidth]').inputValue(), '194560Kbps');
+  assert.equal(await page.locator('[name=rd]').inputValue(), '');
+  assert.equal(await page.locator('[name=createVrf]').inputValue(), 'NO');
+  assert.equal(await page.locator('[name=createSpeed]').inputValue(), 'NO');
+  assert.equal(await page.locator('[name=bgpTerm]').inputValue(), '3');
+  assert.equal(await page.locator('[name=engineeringUrl]').inputValue(), '');
+  for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId', 'access', 'port', 'vlan', 'vrf']) await page.locator(`#config-form [name=${key}]`).fill(juniperSample[key]);
+  await page.locator('[name=port]').fill('20');
+  assert.ok((await page.locator('#code-preview').textContent()).includes('set interfaces et-0/0/20 unit 1204 vlan-id 1204'));
+  const juniperDownloading = page.waitForEvent('download');
+  await page.locator('#download').click();
+  const juniperDownloaded = await juniperDownloading;
+  const juniperDownloadedContent = await readFile(await juniperDownloaded.path(), 'utf8');
+  assert.ok(juniperDownloadedContent.includes('SERVICIO: DATOS\r\n'));
+  assert.ok(juniperDownloadedContent.includes('PUERTO: et-0/0/20\r\n'));
+  assert.ok(juniperDownloadedContent.includes('match 194560Kbps'));
+  assert.ok(!juniperDownloadedContent.includes('153600Kbps'));
+  await page.locator('.nav-item[data-view=history]').click();
+  await page.locator('#history-search').fill('JUNIPER');
+  await page.locator('.history-item').waitFor();
+  assert.equal(await page.locator('.history-item').count(), 1);
+  await page.getByRole('button', { name: 'Ver documento' }).click();
+  await page.locator('#document-dialog').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#saved-document').textContent(), juniperDownloadedContent.replace(/\r\n/g, '\n'));
+  await page.locator('#document-dialog [data-close-dialog]').first().click();
+  console.log('✓ Juniper DATOS estático/BGP, VRF y QoS opcionales, puerto fijo, término, importación, descarga e historial');
+
   await page.locator('#users-nav').click();
   await page.locator('#create-user-form [name=username]').fill('colleague');
   await page.locator('#create-user-form [name=password]').fill('abc');
@@ -336,8 +403,10 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('.nav-item[data-view=generator]').click();
-  await page.locator('[name=solution]').selectOption('CALDERON_PWHE3');
+  await page.locator('[name=solution]').selectOption('JUNIPER');
   await page.locator('#load-example').click();
+  await page.locator('[name=createVrf]').selectOption('YES');
+  await page.locator('[name=createSpeed]').selectOption('YES');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
   await page.screenshot({ path: 'test-results/studio-mobile.png', fullPage: true });
   assert.deepEqual(errors, []);
@@ -345,6 +414,7 @@ try {
   console.log('\nPrueba de navegador completada. Capturas: test-results/');
 } catch (error) {
   console.error(error);
+  console.error('Errores del navegador:', errors);
   console.error(logs.slice(-3000));
   process.exitCode = 1;
 } finally {

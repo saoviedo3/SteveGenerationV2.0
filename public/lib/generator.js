@@ -1,5 +1,8 @@
+import { juniperErrors, juniperPort, juniperScript } from './juniper.js';
+
 export const SOLUTION = 'NNI3_CRM';
 export const SOLUTIONS = {
+  JUNIPER: { label: 'JUNIPER', vendor: 'Juniper', interface: 'et-0/0/', juniper: true, services: ['DATOS'] },
   NNI3_CRM: { label: 'NNI3 CARMEN', interface: 'TenGigE0/2/1/2' },
   NNI2_MAP: { label: 'NNI2 MAPASINGUE', interface: 'TenGigabitEthernet1/1/1' },
   NNI_PORT: { label: 'NNI PORTOVIEJO', interface: 'GigabitEthernet0/0/0/4', routeLinkType: true },
@@ -83,6 +86,7 @@ export function parseInventory(text) {
 
 export function validate(input) {
   const errors = {};
+  const juniper = input.solution === 'JUNIPER';
   const pwhe = Object.hasOwn(SOLUTIONS, input.solution ?? '') && Boolean(SOLUTIONS[input.solution].pwhe);
   for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId', 'access', 'port', 'bandwidth', 'vlan', 'responsible', 'vrf', 'asn', 'loopback', 'publicNetworks', 'lanNetworks', 'peName', 'wanLabel', 'wanNetwork', 'wanPe', 'wanCpe', 'wanBroadcast', 'lastMile', 'engineeringUrl', 'infineraIp']) {
     if (input[key] !== undefined && typeof input[key] !== 'string') errors[key] = 'El valor debe ser texto.';
@@ -103,7 +107,8 @@ export function validate(input) {
   if (!['BGP', 'STATIC'].includes(input.routing)) errors.routing = 'Selecciona BGP o estático.';
   if (!['UNIQUE', 'PPL', 'BCK'].includes(input.linkType)) errors.linkType = 'Selecciona el tipo de enlace.';
   if (!['OPTICAL', 'ELECTRICAL'].includes(input.medium)) errors.medium = 'Selecciona óptico o eléctrico.';
-  if (!Object.hasOwn(SOLUTIONS, input.solution ?? '')) errors.solution = 'Selecciona una solución Cisco disponible.';
+  if (!Object.hasOwn(SOLUTIONS, input.solution ?? '')) errors.solution = 'Selecciona una solución disponible.';
+  if (juniper) Object.assign(errors, juniperErrors(input));
   if (clean(input.engineeringUrl)) {
     try {
       const url = new URL(clean(input.engineeringUrl));
@@ -240,6 +245,8 @@ export function generate(input) {
   if (Object.keys(errors).length) return { errors };
   const d = Object.fromEntries(Object.entries(input).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]));
   const solution = SOLUTIONS[d.solution];
+  const juniper = Boolean(solution.juniper);
+  if (juniper) d.port = juniperPort(d.port);
   const pwhe = Boolean(solution.pwhe);
   const internet = d.service === 'INTERNET';
   const bgp = d.routing === 'BGP';
@@ -251,11 +258,11 @@ export function generate(input) {
     : baseName.slice(0, 30);
   const description = `${baseName}_${internet ? 'int' : 'dat'}${d.linkType === 'UNIQUE' ? '' : `_${d.linkType.toLowerCase()}`}_${d.linkId}`;
   const vlan = pwhe ? String(Number(d.vlan)).padStart(4, '0') : String(Number(d.vlan));
-  const iface = pwhe ? `PW-Ether${internet ? '2' : '1'}${vlan}` : `${solution.interface}.${internet ? '30' : '10'}${Number(d.vlan)}`;
+  const iface = juniper ? `${d.port}.${vlan}` : pwhe ? `PW-Ether${internet ? '2' : '1'}${vlan}` : `${solution.interface}.${internet ? '30' : '10'}${Number(d.vlan)}`;
   const p2p = baseName.slice(0, 16);
   const equipment = pwhe ? (/^.+?\s+-\s+([A-Za-z0-9_.-]+)\s+-\s+N-PE$/i.exec(d.access)?.[1] ?? d.access) : d.access.toUpperCase();
   const shortDescription = `${p2p.replace(/_+$/, '')}_${internet ? 'int' : 'dat'}${d.linkType === 'UNIQUE' ? '' : `_${d.linkType.toLowerCase()}`}_${d.linkId}`;
-  const tags = [{ label: 'Enlace', value: `${description.toUpperCase()}:${equipment}:${d.solution}` }];
+  const tags = [{ label: juniper ? 'Interfaz' : 'Enlace', value: juniper ? description.toUpperCase() : `${description.toUpperCase()}:${equipment}:${d.solution}` }];
   if (pwhe) tags.push(
     { label: `PWHE principal · ${solution.peers[0].name}`, value: `${shortDescription.toUpperCase()}:${equipment}:${solution.pwheTagPrefix}_PRI` },
     { label: `PWHE respaldo · ${solution.peers[1].name}`, value: `${shortDescription.toUpperCase()}:${equipment}:${solution.pwheTagPrefix}_BCK` },
@@ -265,7 +272,9 @@ export function generate(input) {
   const lanNets = networks(d.lanNetworks);
   const staticNets = [...new Set([...(internet ? (!bgp ? publicNets : []) : [d.loopback]), ...lanNets])];
   const bandwidth = d.bandwidth.replace(/kbps/i, 'Kbps');
-  const title = `${d.iasi} ${d.client.toUpperCase()} ${d.branch.toUpperCase()}${d.linkType === 'UNIQUE' ? '' : ` ${d.linkType}`} ${d.service}`;
+  const title = juniper
+    ? `${d.iasi} ${d.client.toUpperCase()} ${d.branch.toUpperCase()} DAT${d.linkType === 'UNIQUE' ? '' : ` ${d.linkType}`}`
+    : `${d.iasi} ${d.client.toUpperCase()} ${d.branch.toUpperCase()}${d.linkType === 'UNIQUE' ? '' : ` ${d.linkType}`} ${d.service}`;
   const wanLabel = d.wanLabel || `${d.client.toUpperCase()} ${d.branch.toUpperCase()} ${d.service}`;
   const wanRows = [[d.wanNetwork, 'Red'], [d.wanPe, d.peName || 'PE'], [d.wanCpe, 'CLIENTE'], [d.wanBroadcast, 'Broadcast']].map(([ip, role]) => `${wanLabel.padEnd(45)} ${ip.padEnd(15)} ${role}`).join('\n');
   const header = [
@@ -274,16 +283,16 @@ export function generate(input) {
     `AB: ${bandwidth}`, `VLAN: ${vlan}`, `VRF: ${vrf}`, `ENRUTAMIENTO: ${bgp ? 'BGP' : 'ESTATICO'}`,
     ...(bgp ? [`ASN: ${d.asn}`] : []),
     ...(internet ? [`RED PUBLICA: ${publicNets.join(', ')}`] : [`LOOPBACK MONITOREO: ${d.loopback}`]),
-    `RED LAN: ${lanNets.join(', ')}`, 'RED WAN:', '', wanRows, '', tag, SEPARATOR, '',
+    `RED LAN: ${lanNets.join(', ')}`, 'RED WAN:', '', wanRows, '', ...(!juniper ? [tag] : []), SEPARATOR, '',
     `RESPONSABLE: ${d.responsible}`, 'OBSERVACIONES:', d.lastMile ?? 'UM TIGO',
-    d.medium === 'OPTICAL' ? 'REQUIERE SFP 1000BASEBX' : 'REQUIERE CONVERSOR OPTICO/ELECTRICO',
+    ...(!juniper ? [d.medium === 'OPTICAL' ? 'REQUIERE SFP 1000BASEBX' : 'REQUIERE CONVERSOR OPTICO/ELECTRICO'] : []),
     '', SEPARATOR, 'Script:', '',
   ];
   const context = { d, internet, bgp, vrf, baseName, routeDescription, description, iface, bandwidth, staticNets, publicNets, p2p, vlan };
-  const generated = pwhe ? pwheScript(context) : d.solution === 'NNI2_MAP' ? mapasingueScript(context) : carmenScript(context);
+  const generated = juniper ? juniperScript(context) : pwhe ? pwheScript(context) : d.solution === 'NNI2_MAP' ? mapasingueScript(context) : carmenScript(context);
   const whitelist = internet ? ['', '////////// IPTCHL1CAR201 - IPTCHL1CCRM01 //////////', '', 'object-group network ipv4 SMTP-WHITELIST-NET', ...publicNets, 'sh comm cha dif', `commit comment ${baseName}`, 'end'] : [];
   const monitorFilter = d.solution === 'NNI2_MAP' ? d.loopback?.split('/')[0] : d.loopback;
-  const checks = [
+  const checks = juniper ? generated.checks : [
     `sho run interface ${iface}`, `sho int desc | in ${vlan}`, `sho run | in ${d.wanCpe}`,
     ...generated.checks, '',
     ...(!internet ? [`sho route vrf sigmars | in ${monitorFilter}`] : publicNets.map(net => `sho route vrf ${vrf} | in ${net}`)),

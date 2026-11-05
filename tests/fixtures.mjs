@@ -10,6 +10,47 @@ export const sample = {
   lastMile: 'UM TIGO', engineeringUrl: '',
 };
 
+export const juniperSample = {
+  ...sample, solution: 'JUNIPER', service: 'DATOS', routing: 'STATIC', linkType: 'BCK',
+  client: 'CORNEJOTEX', branch: 'UIO PLANTA ZAMBIZA', iasi: '128627-4-1', linkId: '10073947',
+  workOrder: 'CHG0459888', access: 'MIRAFLORES', port: '19', bandwidth: '40960Kbps',
+  vlan: '1204', vrf: 'cornejotex', asn: '65509', loopback: '10.116.103.202/32',
+  publicNetworks: '', wanNetwork: '10.112.48.180', wanPe: '10.112.48.181',
+  wanCpe: '10.112.48.182', wanBroadcast: '10.112.48.183',
+  wanLabel: 'CORNEJOTEX UIO PLANTA ZAMBIZA DAT BCK', peName: 'FUSION',
+  createVrf: 'NO', createSpeed: 'NO', rd: '103211', bgpTerm: '3',
+  engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@C477_PICH_RED-UIO-PZ-M_SERV-D-BCK',
+};
+
+export const juniperInventory = `CORNEJOTEX CIA. LTDA.
+-----------------------------
+SERVICIO:
+ACCESO:
+PUERTO:
+AB: 194560Kbps
+VLAN:
+VRF: ()
+ENRUTAMIENTO:
+ASN:
+LOOPBACK MONITOREO: 10.116.103.202/32
+RED PUBLICA: 181.188.210.71 /32
+RED LAN:
+SOURCE TUNEL (LOOPBACK PE):
+DESTINATION TUNEL (IP SIM CARD):
+IMSI SIM CARD:
+RED WAN:
+
+CORNEJOTEX UIO PLANTA ZAMBIZA INT BCK           10.112.48.180   Red
+CORNEJOTEX UIO PLANTA ZAMBIZA INT BCK           10.112.48.181   FUSION
+CORNEJOTEX UIO PLANTA ZAMBIZA INT BCK           10.112.48.182   CLIENTE
+CORNEJOTEX UIO PLANTA ZAMBIZA INT BCK           10.112.48.183   Broadcast
+
+/////////////////////////////////////////////////////////////////////////
+RESPONSABLE: Steven Alejandro Oviedo Buitron
+OBSERVACIONES:
+UM TIGO
+`;
+
 export const mapSample = {
   ...sample, solution: 'NNI2_MAP', iasi: '130763-4-1', client: 'BCO PACIFICO', branch: 'GYE PLAZA GUAYARTE',
   linkId: '10072843', workOrder: 'CHG0510792', access: 'U_CATOLICA_GYE_GWT_6150', port: 'OIGE8[0-1-7] GE: 4',
