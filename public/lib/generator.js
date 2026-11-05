@@ -168,9 +168,9 @@ function pwheScript(c) {
       ' attach generic-interface-list PWHE-InterAS-Infinera', '!',
       'l2vpn', ' xconnect group EoMPLS_PWHE_Infinera', `  p2p ${p2p}`, `   interface ${iface}`,
       `   ${peer.neighbor} ${d.infineraIp} pw-id ${peer.pwId}`, '    pw-class EoMPLS_Fusion_Infinera', '!', '',
-      line, `ENRUTAMIENTO - ${peer.name}`, line, ...routing.script, '',
     );
   }
+  script.push(line, c.bgp ? 'BGP' : 'ENRUTAMIENTO', line, '', ...routing.script);
   return {
     script,
     checks: [`sho run l2vpn xconnect group EoMPLS_PWHE_Infinera p2p ${p2p}`, ...routing.checks],
@@ -277,6 +277,6 @@ export function generate(input) {
     ...lanNets.map(net => `sho route vrf ${vrf} | in ${net}`),
     ...(internet ? ['', ...publicNets.map(net => `sh runn object-group network ipv4 SMTP-WHITELIST-NET | inc ${net}`)] : []),
   ];
-  const document = [...header, ...generated.script, ...whitelist, '', SEPARATOR, 'VALIDACIONES:', ...(pwhe ? ['Aplicar estas validaciones en IPTCHL3CAR205 e IPTCHL3CAR203.'] : []), '', ...checks, '', SEPARATOR, 'CONFIGURADO:', ''].join('\n');
+  const document = [...header, ...generated.script, ...whitelist, '', SEPARATOR, 'VALIDACIONES:', '', ...checks, '', SEPARATOR, 'CONFIGURADO:', ''].join('\n');
   return { errors: {}, title, description, tag, tags, interface: iface, solution: d.solution, solutionLabel: solution.label, script: generated.script.join('\n'), validations: checks.join('\n'), document, filename: `${d.iasi}_${description}.txt` };
 }

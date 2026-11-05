@@ -158,7 +158,7 @@ function syncFields() {
   $('#infinera-field').hidden = !pwhe;
   form.elements.infineraIp.required = pwhe;
   $('.review-note').textContent = pwhe
-    ? `Revisa los bloques de IPTCHL3CAR205 e IPTCHL3CAR203: cada uno incluye su enrutamiento.${internet ? ' El bloque SMTP se aplica por separado en los equipos indicados.' : ''}`
+    ? `Revisa los dos bloques PWHE y el bloque de enrutamiento común.${internet ? ' El bloque SMTP se aplica por separado en los equipos indicados.' : ''}`
     : 'Revisa el documento antes de aplicarlo. El bloque SMTP se ejecuta por separado en los equipos indicados.';
   $('.workflow-label').textContent = `CISCO / ${SOLUTIONS[form.elements.solution.value].label}`;
 }

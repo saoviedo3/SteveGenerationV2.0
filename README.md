@@ -123,7 +123,7 @@ Esta incorporación usa la columna de solución existente y no requiere una migr
 
 ## Reglas de PWHE CARRETAS
 
-La solución `CARRETAS_PWHE3` genera un bloque completo para **IPTCHL3CAR205 (10.116.254.32)** y otro para **IPTCHL3CAR203 (10.116.254.29)**. Ambos incluyen interfaz PWHE, xconnect y el enrutamiento correspondiente. El bloque SMTP de INTERNET queda separado para los equipos indicados en su encabezado.
+La solución `CARRETAS_PWHE3` genera un bloque de interfaz PWHE y xconnect para **IPTCHL3CAR205 (10.116.254.32)** y otro para **IPTCHL3CAR203 (10.116.254.29)**. Después presenta una sola sección común de enrutamiento: `ENRUTAMIENTO` para estático o `BGP` para BGP, incluidas las rutas estáticas de monitoreo y LAN que correspondan. El bloque SMTP de INTERNET queda separado para los equipos indicados en su encabezado.
 
 | Recurso con VLAN 0600 | INTERNET | DATOS |
 | --- | --- | --- |
@@ -148,7 +148,7 @@ La VLAN se completa a **cuatro dígitos**: `600` y `0600` generan el mismo resul
 
 Las direcciones WAN siempre se toman del TXT y de sus correcciones manuales. El archivo de origen del ejemplo contiene `10.112.50.108/30`, mientras que el resultado de referencia usa `10.112.21.200/30`: la aplicación no convierte una red en otra. **Cargar ejemplo** utiliza los valores del resultado de referencia; al importar el TXT se conservan los del archivo, incluido el nombre compuesto `IPTCHL3CAR205 - IPTCHL3CAR203`.
 
-En PWHE, las validaciones del PE se aplican en ambos equipos. Las validaciones SMTP se ejecutan en los equipos del bloque SMTP. Esta solución usa la columna de historial existente y no requiere migraciones nuevas.
+En PWHE, las validaciones se presentan directamente como comandos, sin una nota adicional sobre los PE. Las validaciones SMTP se ejecutan en los equipos del bloque SMTP. Esta solución usa la columna de historial existente y no requiere migraciones nuevas.
 
 ### Actualizar una instalación existente
 

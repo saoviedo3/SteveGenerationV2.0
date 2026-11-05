@@ -114,6 +114,9 @@ try {
         assert.equal(result.data.document.match(/^interface PW-Ether\d+$/gm).length, 2);
         assert.ok(result.data.document.includes('IPTCHL3CAR205 (10.116.254.32)'));
         assert.ok(result.data.document.includes('IPTCHL3CAR203 (10.116.254.29)'));
+        assert.equal((result.data.document.match(/^router bgp 19114$/gm) ?? []).length, routing === 'BGP' ? 1 : 0);
+        assert.equal((result.data.document.match(/^router static$/gm) ?? []).length, service === 'DATOS' || routing === 'STATIC' ? 1 : 0);
+        assert.ok(!result.data.document.includes('Aplicar estas validaciones'));
         const stored = (await request(`/history/${result.data.id}`, { cookie: firstCookie })).data.item;
         assert.equal(stored.document, result.data.document);
         assert.equal(stored.solution, 'CARRETAS_PWHE3');

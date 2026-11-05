@@ -29,12 +29,24 @@ for (const service of ['DATOS', 'INTERNET']) for (const routing of ['STATIC', 'B
     assert.equal(output.script.match(/^    pw-class EoMPLS_Fusion_Infinera$/gm).length, 2);
     assert.equal(output.script.match(/^  p2p bluecard_uio_mat$/gm).length, 2);
     const backup = output.script.indexOf('IPTCHL3CAR203 (10.116.254.29)');
-    const blocks = [output.script.slice(0, backup), output.script.slice(backup)];
+    const routingHeading = routing === 'BGP' ? 'BGP' : 'ENRUTAMIENTO';
+    const routingStart = output.script.indexOf(`\n${routingHeading}\n`);
+    assert.ok(routingStart > backup);
+    assert.equal(output.script.match(/^(BGP|ENRUTAMIENTO)$/gm).length, 1);
+    assert.ok(!output.document.includes('Aplicar estas validaciones en IPTCHL3CAR205 e IPTCHL3CAR203.'));
+    const blocks = [output.script.slice(0, backup), output.script.slice(backup, routingStart)];
     for (const block of blocks) {
       assert.ok(block.includes(` vrf ${vrf}`));
       assert.ok(block.includes(' ipv4 address 10.112.21.201 255.255.255.252'));
       assert.ok(block.includes(' service-policy input 153600Kbps'));
+      assert.ok(!block.includes('router bgp'));
+      assert.ok(!block.includes('router static'));
+    }
+    const block = output.script.slice(routingStart);
+    {
       assert.equal(block.includes('router bgp 19114'), routing === 'BGP');
+      assert.equal((block.match(/^router bgp 19114$/gm) ?? []).length, routing === 'BGP' ? 1 : 0);
+      assert.equal((block.match(/^router static$/gm) ?? []).length, !internet || routing === 'STATIC' ? 1 : 0);
       if (!internet) {
         assert.ok(block.includes(`192.0.2.1/32 ${iface} 10.112.21.202 description bluecard_uio_matriz`));
         if (routing === 'BGP') assert.ok(block.includes('maximum-prefix 500 75\n    route-policy default_policy_pass_all in\n    route-policy default_policy_pass_all out'));
@@ -90,7 +102,7 @@ test('WAN importada y vecino Infinera se usan literalmente en ambos equipos', ()
   const output = generate(input);
   assert.deepEqual(output.errors, {});
   assert.equal(output.script.match(/ipv4 address 10\.112\.50\.109 /g).length, 2);
-  assert.equal(output.script.match(/PW-Ether20600 10\.112\.50\.110 description/g).length, 2);
+  assert.equal(output.script.match(/PW-Ether20600 10\.112\.50\.110 description/g).length, 1);
   assert.ok(!output.document.includes('10.112.21.201'));
   assert.ok(output.script.includes('neighbor ipv4 10.73.32.160 pw-id 200600'));
   assert.ok(output.script.includes('neighbor 10.73.32.160 pw-id 210600'));
@@ -104,11 +116,11 @@ test('PWHE valida vecino, VLAN, enrutamiento y caracteres de los encabezados', (
   assert.ok(generate({ ...pwheSample, access: 'N3059\nshutdown' }).errors.access);
 });
 
-test('PWHE enruta LAN y varias redes públicas en ambos PE sin ampliar el prefix-set con LAN', () => {
+test('PWHE reúne LAN y varias redes públicas en un bloque común sin ampliar el prefix-set con LAN', () => {
   const output = generate({ ...pwheSample, routing: 'BGP', asn: '65437', publicNetworks: '200.24.222.8/29\n203.0.113.0/24', lanNetworks: '192.168.100.0/24' });
   assert.deepEqual(output.errors, {});
-  assert.equal(output.script.match(/192\.168\.100\.0\/24 PW-Ether20600 /g).length, 2);
-  assert.equal(output.script.match(/  200\.24\.222\.8\/29,\n  203\.0\.113\.0\/24\nend-set/g).length, 2);
+  assert.equal(output.script.match(/192\.168\.100\.0\/24 PW-Ether20600 /g).length, 1);
+  assert.equal(output.script.match(/  200\.24\.222\.8\/29,\n  203\.0\.113\.0\/24\nend-set/g).length, 1);
   assert.ok(output.document.includes('object-group network ipv4 SMTP-WHITELIST-NET\n200.24.222.8/29\n203.0.113.0/24'));
 });
 
