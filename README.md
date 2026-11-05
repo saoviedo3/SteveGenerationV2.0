@@ -2,6 +2,8 @@
 
 Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco · NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO, PWHE CARRETAS y PWHE CALDERON**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiqueta ZTE, script y validaciones.
 
+Sitio de producción: **https://steve-generation.pages.dev/**. El primer acceso se realiza como **root**, con la contraseña elegida en el secreto `PAGES_INITIAL_ADMIN_PASSWORD` del entorno. Desde Administración puedes crear las demás cuentas. Los usuarios y el historial de producción se guardan en D1 y son independientes de la base local.
+
 ## Funciones
 
 - DATOS BGP, DATOS estático, INTERNET BGP e INTERNET estático en NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO, PWHE CARRETAS y PWHE CALDERON: veinte plantillas.

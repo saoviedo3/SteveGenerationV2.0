@@ -7,7 +7,7 @@
     {
       "binding": "DB",
       "database_name": "steve-generation",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "d18ce713-cff4-4122-8213-1b910487087a",
       "preview_database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
