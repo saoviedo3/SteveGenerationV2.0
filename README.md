@@ -1,10 +1,10 @@
 # Steve Generation
 
-Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco · NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO y PWHE CARRETAS**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiqueta ZTE, script y validaciones.
+Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco · NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO, PWHE CARRETAS y PWHE CALDERON**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiqueta ZTE, script y validaciones.
 
 ## Funciones
 
-- DATOS BGP, DATOS estático, INTERNET BGP e INTERNET estático en NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO y PWHE CARRETAS: dieciséis plantillas.
+- DATOS BGP, DATOS estático, INTERNET BGP e INTERNET estático en NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO, PWHE CARRETAS y PWHE CALDERON: veinte plantillas.
 - Enlace único, principal (PPL) y respaldo (BCK); medio óptico o eléctrico.
 - Importación `.txt` por archivo, arrastre o texto pegado. UTF-8 y Windows-1252; máximo 256 KB. El archivo original se procesa en el navegador y no se sube al servidor.
 - Validación de VLAN, ASN, IPv4, redes CIDR y las cuatro direcciones de una WAN `/30`.
@@ -96,7 +96,7 @@ Cliente y sucursal se ingresan explícitamente. Importar un nuevo TXT borra los 
 | Etiqueta | `CLIENTE_SUCURSAL_DAT/INT[_PPL/BCK]_ID:ACCESO:NNI2_MAP` |
 | Validación de monitoreo | `sho route vrf sigmars` con la IP sin `/32` |
 
-Se mantiene el orden `DAT_BCK`, `INT_BCK`, `DAT_PPL` e `INT_PPL` en las cuatro soluciones, según la confirmación del usuario. El tipo PPL/BCK aparece antes del servicio en el título. NNI2 no agrega comandos de `commit` al bloque PE; el bloque SMTP separado conserva su propia sintaxis.
+Se mantiene el orden `DAT_BCK`, `INT_BCK`, `DAT_PPL` e `INT_PPL` en las cinco soluciones, según la confirmación del usuario. El tipo PPL/BCK aparece antes del servicio en el título. NNI2 no agrega comandos de `commit` al bloque PE; el bloque SMTP separado conserva su propia sintaxis.
 
 ## Reglas de NNI PORTOVIEJO
 
@@ -150,6 +150,27 @@ Las direcciones WAN siempre se toman del TXT y de sus correcciones manuales. El 
 
 En PWHE, las validaciones se presentan directamente como comandos, sin una nota adicional sobre los PE. Las validaciones SMTP se ejecutan en los equipos del bloque SMTP. Esta solución usa la columna de historial existente y no requiere migraciones nuevas.
 
+## Reglas de PWHE CALDERON
+
+`CALDERON_PWHE3` comparte las cuatro variantes de PWHE CARRETAS y presenta dos bloques PWHE seguidos de un solo bloque común de enrutamiento. Cambian los equipos, sus direcciones, las etiquetas y la línea de dampening:
+
+| Recurso | Regla |
+| --- | --- |
+| PE principal | `IPTCHL3CALD02 (10.116.254.136)` |
+| PE respaldo | `IPTCHL3CALD01 (10.116.254.26)` |
+| VLAN 2318 · INTERNET | `PW-Ether22318`, PW-ID principal `202318`, respaldo `212318` |
+| VLAN 2318 · DATOS | `PW-Ether12318`, PW-ID principal `102318`, respaldo `112318` |
+| Vecinos | `neighbor ipv4 <IP Infinera> pw-id ...` en ambos PE |
+| Dampening | `dampening 1 75 2000 240`, después de la dirección IP, en las dos interfaces y en las cuatro variantes |
+| Etiqueta del enlace | `...:CALDERON_PWHE3` |
+| Etiquetas cortas | `...:CLD_PWHE3_PRI` y `...:CLD_PWHE3_BCK` |
+
+Según la confirmación del usuario, se mantienen las reglas de CARRETAS: **PPL/BCK**, ID en la descripción de la interfaz y las etiquetas, p2p de los primeros 16 caracteres y etiquetas PRI/BCK derivadas de ese nombre corto. No se reproduce la variante PPAL/PPALL ni la omisión de ID del ejemplo. Al unir el nombre corto de las etiquetas al servicio, se evita duplicar el guion bajo si el carácter 16 del p2p ya es `_`.
+
+La VRF de INTERNET es `internet-pccs-ncb`, el ASN local es `19114` y las comunidades son `(19114:10, 19114:11, 19114:504)`. La preferencia local y el peso de INTERNET BGP son 200 para único/PPL y 100 para BCK. DATOS exige su VRF y loopback de monitoreo; las LAN se enrutan estáticamente. El prefix-set y todas sus referencias se generan con el mismo nombre. El comentario SMTP usa cliente y sucursal.
+
+**Cargar ejemplo** prepara el caso de FARMAENLACE en Internet BGP con VLAN `2318`, ASN remoto `65113`, vecino Infinera `10.73.32.224`, red pública `200.24.209.244/30` y última milla `UM TELEFONICA`. Puedes editar esos recursos y cambiar el servicio y enrutamiento; el dampening pertenece a CALDERON y no se agrega a CARRETAS. Se conservan cuentas e historial sin migraciones adicionales.
+
 ### Actualizar una instalación existente
 
 Detén el servidor con Ctrl+C antes de actualizar:
@@ -172,9 +193,9 @@ npm run test:integration
 CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
 ```
 
-- `test`: parser, las 48 combinaciones de solución/servicio/enrutamiento/tipo, redes, entradas inválidas y contraseñas.
+- `test`: parser, las 60 combinaciones de solución/servicio/enrutamiento/tipo, redes, entradas inválidas y contraseñas.
 - `check`: sintaxis y empaquetado con `wrangler deploy --dry-run`; no publica.
-- `test:integration`: base temporal, migraciones, creación de administrador y Worker local. Comprueba autenticación, permisos, las dieciséis variantes, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
+- `test:integration`: base temporal, migraciones, creación de administrador y Worker local. Comprueba autenticación, permisos, las veinte variantes, aislamiento del historial, contraseñas, desactivación y límite de intentos. Limpia base y servidor al terminar.
 - `test:browser`: flujo real en Chromium de escritorio/móvil, importación, variantes, descarga, historial, copia individual de etiquetas PWHE, administración y errores JavaScript/CSP. Requiere Chromium instalado o `CHROMIUM_PATH`. Usa una base temporal. Capturas en `test-results/`, ignoradas por Git.
 
 No requieren credenciales de Cloudflare. Estas pruebas no validan comandos contra un Cisco real.

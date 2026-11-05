@@ -3,7 +3,20 @@ export const SOLUTIONS = {
   NNI3_CRM: { label: 'NNI3 CARMEN', interface: 'TenGigE0/2/1/2' },
   NNI2_MAP: { label: 'NNI2 MAPASINGUE', interface: 'TenGigabitEthernet1/1/1' },
   NNI_PORT: { label: 'NNI PORTOVIEJO', interface: 'GigabitEthernet0/0/0/4', routeLinkType: true },
-  CARRETAS_PWHE3: { label: 'PWHE CARRETAS', interface: 'PW-Ether', pwhe: true },
+  CARRETAS_PWHE3: {
+    label: 'PWHE CARRETAS', interface: 'PW-Ether', pwhe: true, pwheTagPrefix: 'CARR_PWHE3',
+    peers: [
+      { name: 'IPTCHL3CAR205', ip: '10.116.254.32', neighbor: 'neighbor ipv4' },
+      { name: 'IPTCHL3CAR203', ip: '10.116.254.29', neighbor: 'neighbor' },
+    ],
+  },
+  CALDERON_PWHE3: {
+    label: 'PWHE CALDERON', interface: 'PW-Ether', pwhe: true, pwheTagPrefix: 'CLD_PWHE3', dampening: '1 75 2000 240',
+    peers: [
+      { name: 'IPTCHL3CALD02', ip: '10.116.254.136', neighbor: 'neighbor ipv4' },
+      { name: 'IPTCHL3CALD01', ip: '10.116.254.26', neighbor: 'neighbor ipv4' },
+    ],
+  },
 };
 const SEPARATOR = '/'.repeat(73);
 const clean = value => String(value ?? '').trim();
@@ -70,7 +83,7 @@ export function parseInventory(text) {
 
 export function validate(input) {
   const errors = {};
-  const pwhe = input.solution === 'CARRETAS_PWHE3';
+  const pwhe = Object.hasOwn(SOLUTIONS, input.solution ?? '') && Boolean(SOLUTIONS[input.solution].pwhe);
   for (const key of ['iasi', 'client', 'branch', 'workOrder', 'linkId', 'access', 'port', 'bandwidth', 'vlan', 'responsible', 'vrf', 'asn', 'loopback', 'publicNetworks', 'lanNetworks', 'peName', 'wanLabel', 'wanNetwork', 'wanPe', 'wanCpe', 'wanBroadcast', 'lastMile', 'engineeringUrl', 'infineraIp']) {
     if (input[key] !== undefined && typeof input[key] !== 'string') errors[key] = 'El valor debe ser texto.';
   }
@@ -150,24 +163,24 @@ function carmenScript(c) {
 
 function pwheScript(c) {
   const { d, iface, description, bandwidth, vrf, internet, p2p, vlan } = c;
+  const solution = SOLUTIONS[d.solution];
   const routing = carmenRouting({
     ...c, communities: '(19114:10, 19114:11, 19114:504)', policySuffix: 'IPV4_IN', neighborDescription: p2p,
   });
-  const peers = [
-    { name: 'IPTCHL3CAR205', ip: '10.116.254.32', role: 'PRI', pwId: `${internet ? '20' : '10'}${vlan}`, neighbor: 'neighbor ipv4' },
-    { name: 'IPTCHL3CAR203', ip: '10.116.254.29', role: 'BCK', pwId: `${internet ? '21' : '11'}${vlan}`, neighbor: 'neighbor' },
-  ];
   const line = '-'.repeat(74);
   const script = [];
-  for (const peer of peers) {
+  for (const [index, peer] of solution.peers.entries()) {
+    const role = index === 0 ? 'PRI' : 'BCK';
+    const pwId = `${internet ? '2' : '1'}${index}${vlan}`;
     script.push(
-      line, `${peer.name} (${peer.ip}) - ${peer.pwId}`, line,
-      `interface ${iface}`, ` description --- ${description} --- L3-PWHE-${peer.role}`,
+      line, `${peer.name} (${peer.ip}) - ${pwId}`, line,
+      `interface ${iface}`, ` description --- ${description} --- L3-PWHE-${role}`,
       ' mtu 2014', ` service-policy input ${bandwidth}`, ` service-policy output ${bandwidth}`,
       ` vrf ${vrf}`, ` ipv4 address ${d.wanPe} 255.255.255.252`,
+      ...(solution.dampening ? [` dampening ${solution.dampening}`] : []),
       ' attach generic-interface-list PWHE-InterAS-Infinera', '!',
       'l2vpn', ' xconnect group EoMPLS_PWHE_Infinera', `  p2p ${p2p}`, `   interface ${iface}`,
-      `   ${peer.neighbor} ${d.infineraIp} pw-id ${peer.pwId}`, '    pw-class EoMPLS_Fusion_Infinera', '!', '',
+      `   ${peer.neighbor} ${d.infineraIp} pw-id ${pwId}`, '    pw-class EoMPLS_Fusion_Infinera', '!', '',
     );
   }
   script.push(line, c.bgp ? 'BGP' : 'ENRUTAMIENTO', line, '', ...routing.script);
@@ -241,11 +254,11 @@ export function generate(input) {
   const iface = pwhe ? `PW-Ether${internet ? '2' : '1'}${vlan}` : `${solution.interface}.${internet ? '30' : '10'}${Number(d.vlan)}`;
   const p2p = baseName.slice(0, 16);
   const equipment = pwhe ? (/^.+?\s+-\s+([A-Za-z0-9_.-]+)\s+-\s+N-PE$/i.exec(d.access)?.[1] ?? d.access) : d.access.toUpperCase();
-  const shortDescription = `${p2p}_${internet ? 'int' : 'dat'}${d.linkType === 'UNIQUE' ? '' : `_${d.linkType.toLowerCase()}`}_${d.linkId}`;
+  const shortDescription = `${p2p.replace(/_+$/, '')}_${internet ? 'int' : 'dat'}${d.linkType === 'UNIQUE' ? '' : `_${d.linkType.toLowerCase()}`}_${d.linkId}`;
   const tags = [{ label: 'Enlace', value: `${description.toUpperCase()}:${equipment}:${d.solution}` }];
   if (pwhe) tags.push(
-    { label: 'PWHE principal · IPTCHL3CAR205', value: `${shortDescription.toUpperCase()}:${equipment}:CARR_PWHE3_PRI` },
-    { label: 'PWHE respaldo · IPTCHL3CAR203', value: `${shortDescription.toUpperCase()}:${equipment}:CARR_PWHE3_BCK` },
+    { label: `PWHE principal · ${solution.peers[0].name}`, value: `${shortDescription.toUpperCase()}:${equipment}:${solution.pwheTagPrefix}_PRI` },
+    { label: `PWHE respaldo · ${solution.peers[1].name}`, value: `${shortDescription.toUpperCase()}:${equipment}:${solution.pwheTagPrefix}_BCK` },
   );
   const tag = tags.map(item => item.value).join('\n');
   const publicNets = networks(d.publicNetworks);

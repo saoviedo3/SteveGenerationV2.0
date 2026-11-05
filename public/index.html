@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#122c38">
-  <meta name="description" content="Generador de configuraciones Cisco NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO y PWHE CARRETAS a partir de recursos de Network Inventory.">
+  <meta name="description" content="Generador de configuraciones Cisco NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO, PWHE CARRETAS y PWHE CALDERON a partir de recursos de Network Inventory.">
   <title>Steve Generation · Configuración de red</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/styles.css">
@@ -40,7 +40,7 @@
         <button data-view="history" class="nav-item"><span class="nav-icon">◷</span>Mi historial</button>
         <button data-view="users" class="nav-item" id="users-nav" hidden><span class="nav-icon">♧</span>Usuarios</button>
       </nav>
-      <div class="sidebar-note"><span class="status-dot"></span><b>Cisco</b><p>NNI3 CARMEN · NNI2 MAPASINGUE<br>NNI PORTOVIEJO · PWHE CARRETAS<br>Datos e Internet · BGP / Estático</p><span class="small-tag">16 PLANTILLAS DISPONIBLES</span></div>
+      <div class="sidebar-note"><span class="status-dot"></span><b>Cisco</b><p>NNI3 CARMEN · NNI2 MAPASINGUE<br>NNI PORTOVIEJO · PWHE CARRETAS<br>PWHE CALDERON<br>Datos e Internet · BGP / Estático</p><span class="small-tag">20 PLANTILLAS DISPONIBLES</span></div>
       <div class="sidebar-bottom"><button data-view="account" class="profile"><span id="avatar" class="avatar">S</span><span><b id="profile-name"></b><small id="profile-role"></small></span><span class="profile-arrow">↗</span></button><button id="logout" class="logout">Cerrar sesión <span>↪</span></button></div>
     </aside>
     <div class="main-shell">
@@ -58,7 +58,7 @@
               </section>
               <section class="card"><div class="card-heading"><span class="section-number">02</span><div><h2>Detalles del enlace</h2><p>Completa los datos que identifican tu configuración.</p></div></div>
                 <div class="field-grid">
-                  <label class="span-2">Solución<select name="solution"><option value="NNI3_CRM">Cisco · NNI3 CARMEN</option><option value="NNI2_MAP">Cisco · NNI2 MAPASINGUE</option><option value="NNI_PORT">Cisco · NNI PORTOVIEJO</option><option value="CARRETAS_PWHE3">Cisco · PWHE CARRETAS</option></select></label>
+                  <label class="span-2">Solución<select name="solution"><option value="NNI3_CRM">Cisco · NNI3 CARMEN</option><option value="NNI2_MAP">Cisco · NNI2 MAPASINGUE</option><option value="NNI_PORT">Cisco · NNI PORTOVIEJO</option><option value="CARRETAS_PWHE3">Cisco · PWHE CARRETAS</option><option value="CALDERON_PWHE3">Cisco · PWHE CALDERON</option></select></label>
                   <label>Servicio<select name="service"><option value="DATOS">Datos</option><option value="INTERNET">Internet</option></select></label>
                   <label>Enrutamiento<select name="routing"><option value="BGP">BGP</option><option value="STATIC">Estático</option></select></label>
                   <div class="field-label span-2" role="group" aria-labelledby="link-type-label"><span id="link-type-label">Tipo de enlace</span><span class="segment-control"><label><input type="radio" name="linkType" value="UNIQUE" checked><span>Único</span></label><label><input type="radio" name="linkType" value="PPL"><span>Principal · PPL</span></label><label><input type="radio" name="linkType" value="BCK"><span>Respaldo · BCK</span></label></span></div>

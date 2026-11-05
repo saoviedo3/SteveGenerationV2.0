@@ -109,6 +109,15 @@ export const pwheSample = {
   engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@BLUC_PICH_RED-UIO-M_SERV-INT-PPL',
 };
 
+export const calderonSample = {
+  ...pwheSample, solution: 'CALDERON_PWHE3', routing: 'BGP', client: 'FARMAENLACE', branch: 'UIO LA LUZ COB',
+  iasi: '118192-2-1', linkId: '10063222', workOrder: 'CRQ000000180735', access: 'El_Labrador_8615',
+  port: 'ge13/1/18', bandwidth: '20480Kbps', vlan: '2318', asn: '65113', infineraIp: '10.73.32.224',
+  publicNetworks: '200.24.209.244/30', wanNetwork: '10.112.26.44', wanPe: '10.112.26.45', wanCpe: '10.112.26.46', wanBroadcast: '10.112.26.47',
+  peName: 'IPTCHL3CALD02 - IPTCHL3CALD01', wanLabel: 'FARMAENLACE UIO LA LUZ COBERTURA INTERNET PPLINTERNET',
+  lastMile: 'UM TELEFONICA', engineeringUrl: 'https://telefonica.dokuvizsoftware02.com/direct/openpage.html?page=PRO@A525_MATRIZ_RED-ALLIC_UM-TELE',
+};
+
 export const inventory = `FARMACIAS Y COMISARIATOS DE MEDICINAS SA FARCOMED
 -----------------------------
 SERVICIO:  DATOS

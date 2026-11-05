@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { sample, mapSample, mapInternetSample, portSample, pwheSample } from '../tests/fixtures.mjs';
+import { sample, mapSample, mapInternetSample, portSample, pwheSample, calderonSample } from '../tests/fixtures.mjs';
 import { wranglerArgs, stopProcess } from './wrangler.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'steve-integration-'));
@@ -100,32 +100,37 @@ try {
     const stored = await request(`/history/${entryId}`, { cookie: firstCookie });
     assert.equal(stored.data.item.document, result.data.document);
   });
-  await check('las dieciséis variantes se generan y guardan con su solución', async () => {
-    for (const solution of ['NNI3_CRM', 'NNI2_MAP', 'NNI_PORT', 'CARRETAS_PWHE3']) for (const service of ['DATOS', 'INTERNET']) for (const routing of ['BGP', 'STATIC']) {
+  await check('las veinte variantes se generan y guardan con su solución', async () => {
+    for (const solution of ['NNI3_CRM', 'NNI2_MAP', 'NNI_PORT', 'CARRETAS_PWHE3', 'CALDERON_PWHE3']) for (const service of ['DATOS', 'INTERNET']) for (const routing of ['BGP', 'STATIC']) {
       let input = solution === 'NNI3_CRM' ? sample : service === 'DATOS' ? mapSample : mapInternetSample;
       if (solution === 'NNI_PORT') input = { ...portSample, vrf: 'test_datos', loopback: '192.0.2.1/32', asn: '64877' };
       if (solution === 'CARRETAS_PWHE3') input = { ...pwheSample, vrf: 'test_datos', loopback: '192.0.2.1/32', asn: '65437' };
+      if (solution === 'CALDERON_PWHE3') input = { ...calderonSample, vrf: 'test_datos', loopback: '192.0.2.1/32' };
       const result = await request('/history', { method: 'POST', cookie: firstCookie, data: { ...input, solution, service, routing, engineeringUrl: mapSample.engineeringUrl, lastMile: 'UM TELEFONICA' } });
       assert.equal(result.status, 201);
       assert.equal(result.data.document.includes('router bgp 19114'), routing === 'BGP');
       assert.ok(result.data.document.includes('OBSERVACIONES:\nUM TELEFONICA'));
       assert.ok(result.data.document.includes(mapSample.engineeringUrl));
-      if (solution === 'CARRETAS_PWHE3') {
+      if (['CARRETAS_PWHE3', 'CALDERON_PWHE3'].includes(solution)) {
         assert.equal(result.data.document.match(/^interface PW-Ether\d+$/gm).length, 2);
-        assert.ok(result.data.document.includes('IPTCHL3CAR205 (10.116.254.32)'));
-        assert.ok(result.data.document.includes('IPTCHL3CAR203 (10.116.254.29)'));
+        const peers = solution === 'CALDERON_PWHE3'
+          ? ['IPTCHL3CALD02 (10.116.254.136)', 'IPTCHL3CALD01 (10.116.254.26)']
+          : ['IPTCHL3CAR205 (10.116.254.32)', 'IPTCHL3CAR203 (10.116.254.29)'];
+        for (const peer of peers) assert.ok(result.data.document.includes(peer));
+        assert.equal((result.data.document.match(/^ dampening 1 75 2000 240$/gm) ?? []).length, solution === 'CALDERON_PWHE3' ? 2 : 0);
         assert.equal((result.data.document.match(/^router bgp 19114$/gm) ?? []).length, routing === 'BGP' ? 1 : 0);
         assert.equal((result.data.document.match(/^router static$/gm) ?? []).length, service === 'DATOS' || routing === 'STATIC' ? 1 : 0);
         assert.ok(!result.data.document.includes('Aplicar estas validaciones'));
         const stored = (await request(`/history/${result.data.id}`, { cookie: firstCookie })).data.item;
         assert.equal(stored.document, result.data.document);
-        assert.equal(stored.solution, 'CARRETAS_PWHE3');
+        assert.equal(stored.solution, solution);
       }
     }
     const items = (await request('/history', { cookie: firstCookie })).data.items;
     assert.equal(items.filter(item => item.solution === 'NNI_PORT').length, 4);
     assert.equal(items.filter(item => item.solution === 'NNI2_MAP').length, 4);
     assert.equal(items.filter(item => item.solution === 'CARRETAS_PWHE3').length, 4);
+    assert.equal(items.filter(item => item.solution === 'CALDERON_PWHE3').length, 4);
   });
   await check('aislamiento del historial, incluso frente al administrador', async () => {
     assert.equal((await request('/history', { cookie: secondCookie })).data.items.length, 0);
@@ -133,7 +138,7 @@ try {
       assert.equal((await request(`/history/${entryId}`, { cookie })).status, 404);
       assert.equal((await request(`/history/${entryId}`, { method: 'DELETE', cookie })).status, 404);
     }
-    assert.equal((await request('/history', { cookie: firstCookie })).data.items.length, 17);
+    assert.equal((await request('/history', { cookie: firstCookie })).data.items.length, 21);
   });
   await check('cambio de contraseña comprueba la actual', async () => {
     assert.equal((await request('/password', { method: 'POST', cookie: firstCookie, data: { currentPassword: password, password: 'abc' } })).status, 400);

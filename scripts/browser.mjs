@@ -55,7 +55,7 @@ try {
   await page.screenshot({ path: 'test-results/login-desktop.png', fullPage: true });
   await login(page, 'testroot');
   assert.ok(!(await page.locator('body').innerText()).includes('IOS XR'));
-  assert.equal(await page.locator('[name=solution] option').count(), 4);
+  assert.equal(await page.locator('[name=solution] option').count(), 5);
   await page.screenshot({ path: 'test-results/studio-empty.png', fullPage: true });
   console.log('✓ Inicio de sesión de administrador e interfaz inicial');
 
@@ -270,6 +270,54 @@ try {
   assert.equal(await page.locator('.history-item').count(), 1);
   console.log('✓ Cuatro variantes PWHE, ambos PE, WAN importada, etiquetas copiables y ceros en VLAN');
 
+  await page.locator('.nav-item[data-view=generator]').click();
+  await page.locator('[name=solution]').selectOption('CALDERON_PWHE3');
+  await page.locator('#load-example').click();
+  assert.equal(await page.locator('[name=infineraIp]').inputValue(), '10.73.32.224');
+  assert.equal(await page.locator('[name=lastMile]').inputValue(), 'UM TELEFONICA');
+  const calderonBgp = await page.locator('#code-preview').textContent();
+  assert.equal(calderonBgp.match(/^interface PW-Ether22318$/gm).length, 2);
+  assert.equal(calderonBgp.match(/^ dampening 1 75 2000 240$/gm).length, 2);
+  assert.ok(calderonBgp.includes('IPTCHL3CALD02 (10.116.254.136) - 202318'));
+  assert.ok(calderonBgp.includes('IPTCHL3CALD01 (10.116.254.26) - 212318'));
+  assert.ok(!calderonBgp.includes('IPTCHL3CAR205'));
+  assert.ok(calderonBgp.includes('prefix-set PS_farmaenlace_uio_la_luz_cob_int_ppl_10063222_ALLOWED_IPV4'));
+  assert.equal(calderonBgp.match(/^router bgp 19114$/gm).length, 1);
+  await page.getByRole('button', { name: 'Copiar etiqueta: PWHE principal · IPTCHL3CALD02', exact: true }).click();
+  await page.waitForFunction(async () => (await navigator.clipboard.readText()).endsWith(':CLD_PWHE3_PRI'));
+  const calderonDownloading = page.waitForEvent('download');
+  await page.locator('#download').click();
+  const calderonDownload = await calderonDownloading;
+  const calderonContent = await readFile(await calderonDownload.path(), 'utf8');
+  assert.ok(calderonContent.includes(':CALDERON_PWHE3'));
+  assert.ok(calderonContent.includes(':CLD_PWHE3_BCK'));
+  assert.ok(calderonContent.includes('remote-as 65113'));
+  assert.ok(calderonContent.includes('object-group network ipv4 SMTP-WHITELIST-NET\r\n200.24.209.244/30'));
+  await page.screenshot({ path: 'test-results/calderon-desktop.png', fullPage: true });
+  await page.locator('[name=service]').selectOption('DATOS');
+  await page.locator('[name=vrf]').fill('test_datos');
+  await page.locator('[name=loopback]').fill('192.0.2.1/32');
+  await page.locator('[name=linkType][value=BCK]').check();
+  const calderonDataBgp = await page.locator('#code-preview').textContent();
+  assert.equal(calderonDataBgp.match(/^interface PW-Ether12318$/gm).length, 2);
+  assert.ok(calderonDataBgp.includes('pw-id 102318'));
+  assert.ok(calderonDataBgp.includes('pw-id 112318'));
+  assert.ok(calderonDataBgp.includes('default_policy_pass_all in'));
+  await page.locator('[name=routing]').selectOption('STATIC');
+  const calderonDataStatic = await page.locator('#code-preview').textContent();
+  assert.ok(!calderonDataStatic.includes('router bgp'));
+  assert.equal(calderonDataStatic.match(/^ dampening 1 75 2000 240$/gm).length, 2);
+  await page.locator('[name=service]').selectOption('INTERNET');
+  const calderonInternetStatic = await page.locator('#code-preview').textContent();
+  assert.ok(calderonInternetStatic.includes('200.24.209.244/30 PW-Ether22318 10.112.26.46 description'));
+  assert.equal(calderonInternetStatic.match(/^router static$/gm).length, 1);
+  await page.locator('.nav-item[data-view=history]').click();
+  await page.locator('#history-search').fill('CALDERON');
+  await page.locator('.history-item').waitFor();
+  assert.equal(await page.locator('.history-item').count(), 1);
+  assert.ok((await page.locator('.history-item').textContent()).includes('PWHE CALDERON'));
+  console.log('✓ Cuatro variantes Calderon, PE exclusivos, dampening, etiquetas CLD e historial');
+
   await page.locator('#users-nav').click();
   await page.locator('#create-user-form [name=username]').fill('colleague');
   await page.locator('#create-user-form [name=password]').fill('abc');
@@ -287,7 +335,7 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('.nav-item[data-view=generator]').click();
-  await page.locator('[name=solution]').selectOption('CARRETAS_PWHE3');
+  await page.locator('[name=solution]').selectOption('CALDERON_PWHE3');
   await page.locator('#load-example').click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
   await page.screenshot({ path: 'test-results/studio-mobile.png', fullPage: true });

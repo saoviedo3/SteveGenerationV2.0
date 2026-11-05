@@ -312,6 +312,16 @@ $('#load-example').addEventListener('click', () => {
     wanLabel: 'BLUECARD UIO MATRIZ INT PPL INTERNET', peName: 'IPTCHL3CAR205 - IPTCHL3CAR203',
     engineeringUrl: 'https://tigo.dokuvizsoftware02.com/direct/openpage.html?page=PRO@BLUC_PICH_RED-UIO-M_SERV-INT-PPL',
   });
+  if (solution === 'CALDERON_PWHE3') Object.assign(example, {
+    service: 'INTERNET', routing: 'BGP', linkType: 'PPL', client: 'FARMAENLACE', branch: 'UIO LA LUZ COB',
+    iasi: '118192-2-1', linkId: '10063222', workOrder: 'CRQ000000180735', access: 'El_Labrador_8615',
+    port: 'ge13/1/18', bandwidth: '20480Kbps', vlan: '2318', vrf: 'internet-pccs-ncb',
+    asn: '65113', loopback: '', publicNetworks: '200.24.209.244/30', infineraIp: '10.73.32.224',
+    wanNetwork: '10.112.26.44', wanPe: '10.112.26.45', wanCpe: '10.112.26.46', wanBroadcast: '10.112.26.47',
+    wanLabel: 'FARMAENLACE UIO LA LUZ COBERTURA INTERNET PPLINTERNET', peName: 'IPTCHL3CALD02 - IPTCHL3CALD01',
+    lastMile: 'UM TELEFONICA',
+    engineeringUrl: 'https://telefonica.dokuvizsoftware02.com/direct/openpage.html?page=PRO@A525_MATRIZ_RED-ALLIC_UM-TELE',
+  });
   for (const [key, value] of Object.entries(example)) form.elements[key].value = value;
   lastService = example.service;
   datosVrf = example.service === 'DATOS' ? example.vrf : '';
