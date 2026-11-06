@@ -295,7 +295,7 @@ export function generate(input) {
     ...(internet ? [`RED PUBLICA: ${publicNets.join(', ')}`] : [`LOOPBACK MONITOREO: ${d.loopback}`]),
     `RED LAN: ${lanNets.join(', ')}`, 'RED WAN:', '', wanRows, '', ...(!juniper ? [tag] : []), SEPARATOR, '',
     `RESPONSABLE: ${d.responsible}`, 'OBSERVACIONES:', d.lastMile ?? 'UM TIGO',
-    ...(!juniper ? [d.medium === 'OPTICAL' ? 'REQUIERE SFP 1000BASEBX' : 'REQUIERE CONVERSOR OPTICO/ELECTRICO'] : []),
+    d.medium === 'OPTICAL' ? 'REQUIERE SFP 1000BASEBX' : 'REQUIERE CONVERSOR OPTICO/ELECTRICO',
     '', SEPARATOR, 'Script:', '',
   ];
   const context = { d, internet, bgp, vrf, baseName, routeDescription, description, iface, bandwidth, staticNets, publicNets, p2p, vlan };

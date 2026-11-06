@@ -1,8 +1,8 @@
-# Steve Generation
+# Steve Generation 2.8
 
 Aplicación web en español para convertir recursos de **Network Inventory** en documentos TXT de configuración **Cisco · NNI3 CARMEN, NNI2 MAPASINGUE, NNI PORTOVIEJO, PWHE CARRETAS y PWHE CALDERON**, y **Juniper DATOS e INTERNET**. Importa un archivo, completa el enlace, revisa y descarga encabezado, etiquetas, script y validaciones.
 
-La rama **`codex/juniper-datos`** incorpora **Juniper DATOS e INTERNET, estático y BGP**, y opciones comunes para crear VRF y velocidad en Cisco. Esta actualización todavía no se despliega en Cloudflare Pages; la publicación se hará después de revisarla. El CI de esta rama solo ejecuta comprobaciones.
+La versión **2.8** incorpora **Juniper DATOS e INTERNET, estático y BGP**, opciones comunes para crear VRF y velocidad en Cisco y medio óptico/eléctrico en todas las soluciones, con óptico por defecto. La rama de producción es **`codex/steve-generation-v1`**. La rama **`codex/juniper-datos`** conserva el desarrollo de Juniper; su CI solo ejecuta comprobaciones.
 
 Sitio de producción: **https://steve-generation.pages.dev/**. El primer acceso se realiza como **root**, con la contraseña elegida en el secreto `PAGES_INITIAL_ADMIN_PASSWORD` del entorno. Desde Administración puedes crear las demás cuentas. Los usuarios y el historial de producción se guardan en D1 y son independientes de la base local.
 
@@ -190,7 +190,7 @@ npm run dev
 
 La migración `0002_history_solution.sql` agrega la solución al historial y asigna NNI3 CARMEN a los documentos anteriores. Conserva las cuentas, las contraseñas, las sesiones y los documentos. No vuelvas a crear `root` si ya existe. Los historiales nuevos muestran la solución y permiten buscar por ella.
 
-## Probar Juniper antes de publicarlo
+## Probar Juniper localmente
 
 Desde tu checkout existente en PowerShell, conserva cualquier cambio local y ejecuta:
 

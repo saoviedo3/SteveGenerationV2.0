@@ -14,7 +14,7 @@ for (const routing of ['STATIC', 'BGP']) for (const linkType of ['UNIQUE', 'PPL'
     assert.ok(result.document.includes('SERVICIO: DATOS'));
     assert.ok(result.document.includes('PUERTO: et-0/0/19'));
     assert.ok(result.document.includes(juniperSample.engineeringUrl));
-    assert.ok(!result.document.includes('REQUIERE SFP'));
+    assert.ok(result.document.includes('REQUIERE SFP 1000BASEBX'));
     assert.ok(result.script.includes(`set interfaces et-0/0/19 description "${label}"`));
     assert.ok(result.script.includes(`set interfaces et-0/0/19 unit 1204 description "${label}"`));
     assert.ok(result.script.includes('set interfaces et-0/0/19 unit 1204 vlan-id 1204'));

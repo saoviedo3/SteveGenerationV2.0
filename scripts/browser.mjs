@@ -53,8 +53,10 @@ try {
   await mkdir('test-results', { recursive: true });
   await page.goto(origin);
   await page.locator('#login-view').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('.version-label').textContent(), 'STEVE GENERATION / V2.8');
   await page.screenshot({ path: 'test-results/login-desktop.png', fullPage: true });
   await login(page, 'testroot');
+  assert.equal(await page.locator('.topbar-version').textContent(), 'V2.8');
   assert.ok(!(await page.locator('body').innerText()).includes('IOS XR'));
   assert.equal(await page.locator('[name=solution] option').count(), 6);
   await page.screenshot({ path: 'test-results/studio-empty.png', fullPage: true });
@@ -353,6 +355,12 @@ try {
   await page.locator('[name=routing]').selectOption('STATIC');
   await page.locator('#load-example').click();
   assert.equal(await page.locator('[name=port]').inputValue(), '19');
+  assert.equal(await page.locator('[name=medium]').isVisible(), true);
+  assert.equal(await page.locator('[name=medium]').inputValue(), 'OPTICAL');
+  await page.locator('[name=medium]').selectOption('ELECTRICAL');
+  assert.ok((await page.locator('#code-preview').textContent()).includes('REQUIERE CONVERSOR OPTICO/ELECTRICO'));
+  await page.locator('[name=medium]').selectOption('OPTICAL');
+  assert.ok((await page.locator('#code-preview').textContent()).includes('REQUIERE SFP 1000BASEBX'));
   assert.equal(await page.locator('#port-prefix').textContent(), 'et-0/0/');
   assert.equal(await page.locator('#rd-field').isVisible(), false);
   assert.equal(await page.locator('[name=createVrf]').inputValue(), 'NO');
@@ -421,6 +429,8 @@ try {
   await page.locator('[name=routing]').selectOption('STATIC');
   await page.locator('#load-example').click();
   assert.equal(await page.locator('[name=port]').inputValue(), '4');
+  assert.equal(await page.locator('[name=medium]').inputValue(), 'OPTICAL');
+  await page.locator('[name=medium]').selectOption('ELECTRICAL');
   assert.equal(await page.locator('[name=vrf]').inputValue(), 'internet-pccs-ncb');
   assert.equal(await page.locator('[name=vrf]').getAttribute('readonly'), '');
   assert.equal(await page.locator('#create-vrf-field').isVisible(), false);
@@ -434,7 +444,9 @@ try {
   const staticJuniperDownload = page.waitForEvent('download');
   await page.locator('#download').click();
   const staticJuniperFile = await staticJuniperDownload;
-  assert.ok((await readFile(await staticJuniperFile.path(), 'utf8')).includes('SERVICIO: INTERNET\r\n'));
+  const staticJuniperContent = await readFile(await staticJuniperFile.path(), 'utf8');
+  assert.ok(staticJuniperContent.includes('SERVICIO: INTERNET\r\n'));
+  assert.ok(staticJuniperContent.includes('REQUIERE CONVERSOR OPTICO/ELECTRICO\r\n'));
   await page.locator('[name=routing]').selectOption('BGP');
   await page.locator('#load-example').click();
   assert.equal(await page.locator('[name=juniperRegion]').inputValue(), 'QUITO');

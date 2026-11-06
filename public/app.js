@@ -179,7 +179,6 @@ function syncFields() {
   form.elements.port.inputMode = juniper ? 'numeric' : 'text';
   form.elements.port.maxLength = juniper ? 3 : 100;
   if (juniper) form.elements.port.value = form.elements.port.value.replace(/^et-0\/0\//, '');
-  form.elements.medium.parentElement.hidden = juniper;
   $('#tag-box > label').textContent = juniper ? 'ETIQUETA DE INTERFAZ' : 'ETIQUETA PARA ZTE';
   $('.review-note').textContent = juniper
     ? 'Revisa el puerto físico y el término disponible en la política de exportación. Los comandos delete afectan la unidad 0 y el estado del puerto.'
